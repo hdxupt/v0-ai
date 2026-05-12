@@ -177,3 +177,161 @@ export const aiIssues: AIIssue[] = [
 export function getTaskById(id: string): HomeworkTask | undefined {
   return homeworkTasks.find((t) => t.id === id)
 }
+
+// ========== 学生端：反馈闭环数据 ==========
+
+export interface StudentHistoryItem {
+  id: string
+  date: string // 显示用
+  title: string
+  subject: string
+  score: number
+  totalScore: number
+  classAverage: number
+  rank: number
+  classSize: number
+  isNew?: boolean
+  status: "已批阅" | "已查阅"
+}
+
+export interface WeakKnowledge {
+  name: string
+  myScore: number // 0-100
+  classAverage: number
+  lostPoints: number
+  reason: string
+}
+
+export interface PracticeRecommendation {
+  id: string
+  title: string
+  difficulty: "基础" | "进阶" | "拔高"
+  knowledgePoint: string
+  estimatedMinutes: number
+}
+
+export const studentProfile = {
+  name: "黄子轩",
+  studentNo: "20230308",
+  className: "高二 (3) 班",
+  device: "希沃学习机 W5 Pro",
+}
+
+export const studentHistory: StudentHistoryItem[] = [
+  {
+    id: "hw-2025-0512",
+    date: "5月12日",
+    title: "三角函数练习题",
+    subject: "数学",
+    score: 79,
+    totalScore: 100,
+    classAverage: 82.4,
+    rank: 21,
+    classSize: 48,
+    isNew: true,
+    status: "已批阅",
+  },
+  {
+    id: "hw-2025-0509",
+    date: "5月9日",
+    title: "解析几何基础",
+    subject: "数学",
+    score: 82,
+    totalScore: 100,
+    classAverage: 78.6,
+    rank: 18,
+    classSize: 48,
+    status: "已查阅",
+  },
+  {
+    id: "hw-2025-0508",
+    date: "5月8日",
+    title: "向量与坐标系",
+    subject: "数学",
+    score: 91,
+    totalScore: 100,
+    classAverage: 85.2,
+    rank: 9,
+    classSize: 48,
+    status: "已查阅",
+  },
+  {
+    id: "hw-2025-0506",
+    date: "5月6日",
+    title: "概率与统计入门",
+    subject: "数学",
+    score: 75,
+    totalScore: 100,
+    classAverage: 80.1,
+    rank: 28,
+    classSize: 48,
+    status: "已查阅",
+  },
+  {
+    id: "hw-2025-0505",
+    date: "5月5日",
+    title: "函数与导数复习",
+    subject: "数学",
+    score: 88,
+    totalScore: 100,
+    classAverage: 81.3,
+    rank: 12,
+    classSize: 48,
+    status: "已查阅",
+  },
+]
+
+export const weakKnowledgePoints: WeakKnowledge[] = [
+  {
+    name: "三角函数图像性质",
+    myScore: 45,
+    classAverage: 68,
+    lostPoints: 11,
+    reason: "周期与振幅判断错误，未能识别相位平移影响",
+  },
+  {
+    name: "诱导公式应用",
+    myScore: 62,
+    classAverage: 81,
+    lostPoints: 7,
+    reason: "符号处理不严谨，第二象限角度转换时丢失负号",
+  },
+  {
+    name: "解三角形",
+    myScore: 70,
+    classAverage: 76,
+    lostPoints: 3,
+    reason: "正弦定理使用正确，余弦定理变形步骤可优化",
+  },
+]
+
+export const practiceRecommendations: PracticeRecommendation[] = [
+  {
+    id: "p1",
+    title: "三角函数图像变换专项 (10 题)",
+    difficulty: "基础",
+    knowledgePoint: "三角函数图像性质",
+    estimatedMinutes: 15,
+  },
+  {
+    id: "p2",
+    title: "诱导公式符号陷阱辨析 (8 题)",
+    difficulty: "进阶",
+    knowledgePoint: "诱导公式应用",
+    estimatedMinutes: 12,
+  },
+  {
+    id: "p3",
+    title: "正余弦定理综合应用 (6 题)",
+    difficulty: "拔高",
+    knowledgePoint: "解三角形",
+    estimatedMinutes: 20,
+  },
+]
+
+export const personalAIComment = `子轩同学你好，老师确认完成本次批改啦。
+
+本次三角函数练习中，你在【基础公式记忆】和【常规解三角形】题上表现稳定，可见课堂吸收良好。不过 AI 注意到，你在【三角函数图像性质】部分失分较多（11 分），主要问题是周期 T = 2π/|ω| 中对 ω 系数的处理。
+
+建议结合课本 P78 例 5、例 6 重做一遍，并完成下方推荐的"图像变换专项"练习。如果遇到困难，可以在学习机上直接呼出 AI 老师讲解。继续加油！`
+

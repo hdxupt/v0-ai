@@ -12,6 +12,7 @@ import {
   Settings,
   LifeBuoy,
   GraduationCap,
+  Smartphone,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -19,6 +20,7 @@ const mainNav = [
   { label: "学情看板", href: "/dashboard", icon: LayoutDashboard },
   { label: "作业管理", href: "/dashboard?tab=tasks", icon: ClipboardList },
   { label: "AI 批阅工作台", href: "/dashboard/grading/s08", icon: Sparkles },
+  { label: "学生端预览", href: "/student", icon: Smartphone },
   { label: "班级管理", href: "#", icon: Users },
   { label: "题库中心", href: "#", icon: BookOpenCheck },
   { label: "数据中心", href: "#", icon: BarChart3 },

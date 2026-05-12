@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
 import {
   Sparkles,
   Send,
@@ -10,6 +11,8 @@ import {
   ChevronRight,
   AlertCircle,
   AlertTriangle,
+  Smartphone,
+  ArrowRight,
 } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
@@ -249,6 +252,17 @@ export function GradingControlPanel({ studentName, studentNo, onAnnotationToggle
             <p className="text-[11px] text-muted-foreground leading-relaxed">
               提示：此评语将随作业结果一同发送至学生学习机。
             </p>
+
+            <Link
+              href="/student"
+              className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-md border border-dashed border-primary/40 bg-primary/5 hover:bg-primary/10 transition-colors group"
+            >
+              <span className="flex items-center gap-2 text-xs">
+                <Smartphone className="w-3.5 h-3.5 text-primary" />
+                <span className="font-medium text-foreground">预览学生端接收效果</span>
+              </span>
+              <ArrowRight className="w-3.5 h-3.5 text-primary group-hover:translate-x-0.5 transition-transform" />
+            </Link>
           </div>
         )}
       </div>

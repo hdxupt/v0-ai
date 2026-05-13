@@ -30,7 +30,7 @@ export function AIAssistant() {
   const [input, setInput] = useState("")
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  const { messages, sendMessage, status } = useChat({
+  const { messages, sendMessage, status, error } = useChat({
     transport: new DefaultChatTransport({ api: "/api/chat" }),
   })
 
@@ -110,6 +110,17 @@ export function AIAssistant() {
                       </button>
                     ))}
                   </div>
+                </div>
+              ) : null}
+
+              {error ? (
+                <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive leading-relaxed">
+                  <p className="font-medium mb-0.5">AI 助手暂时不可用</p>
+                  <p className="text-destructive/80">
+                    {String(error.message || error).includes("authentication")
+                      ? "未检测到有效的 AI Gateway API Key。请到 Vercel → AI Gateway 控制台创建 vck_ 开头的 Key 并加入项目 Vars。"
+                      : String(error.message || error).slice(0, 200)}
+                  </p>
                 </div>
               ) : null}
 

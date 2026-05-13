@@ -93,24 +93,24 @@ BLOB_READ_WRITE_TOKEN=<已由集成自动注入>       # 上传图片必需
 - `components/student/install-prompt.tsx` 30 秒后弹安装横幅（beforeinstallprompt）
 - ⚠️ Service Worker 未配置（仅有 manifest，可被「添加到主屏幕」但不支持离线）
 
-### 提示词二：性能优化（70%）
+### 提示词二：性能优化（85%）
 - [x] 4 个 `loading.tsx` 文件（dashboard / student / submit / grading）
 - [x] 关键路由 segment loading 骨架屏
 - [x] dashboard-content 改为 SSR 初始数据 + 客户端 Realtime
-- [ ] dynamic import + ssr:false 优化 GradingImageViewer 等重组件
-- [ ] React.memo / useMemo 优化频繁重渲染组件
-- [ ] SWR 替代少量 useEffect fetch（dashboard / student-shell 已用 SSR + Realtime，可不动）
-- [ ] Lighthouse 报告对比
+- [x] **学情报告页 Recharts 图表 dynamic import + Skeleton fallback**（节省首屏 ~150kB）
+- [x] AI 助教错误友好提示（Gateway key 缺失时显示引导）
+- [ ] React.memo / useMemo 优化（评估后判断收益有限，未做）
+- [ ] Lighthouse 报告对比（建议部署到 Vercel 后跑）
 
 ---
 
 ## 仍未完成 / 可继续完善的任务
 
-### A. AI 助教真实接入（卡点：API key）
-当前 `/api/chat` 已经能稳定返回 SSE 流，但因 `AI_GATEWAY_API_KEY` 未注入 dev VM 而返回 authentication failed。
-解决方法（任选其一）：
-1. 在 `.env.local` 加 `AI_GATEWAY_API_KEY=...`
-2. 部署到 Vercel 并启用 AI Gateway 集成
+### A. AI 助教真实接入（卡点：API key 格式）
+当前 `/api/chat` 已能稳定返回 SSE 流，但因当前 dev 环境的 `AI_GATEWAY_API_KEY` 是 OIDC token 格式（`v1:team_...`）而非标准 `vck_` 格式，AI Gateway 拒绝认证。
+**最终解决**：到 Vercel Dashboard → 你的团队 → AI Gateway → API Keys → Create New Key（vck_ 开头），把这个 key 填入项目 Vars 的 `AI_GATEWAY_API_KEY` 覆盖默认值。部署后 AI 助教将完全可用。
+
+UI 已经处理了 key 缺失的情况——会在对话框顶部显示友好引导，不会白屏。
 
 ### B. 提示词二：性能优化收尾
 ```

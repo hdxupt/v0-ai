@@ -1,6 +1,7 @@
 import type React from "react"
 import { AppSidebar } from "@/components/app/app-sidebar"
 import { AppHeader } from "@/components/app/app-header"
+import { AIAssistant } from "@/components/app/ai-assistant"
 
 export default function DashboardLayout({
   children,
@@ -14,6 +15,7 @@ export default function DashboardLayout({
         <AppHeader />
         <main className="flex-1 min-w-0">{children}</main>
       </div>
+      <AIAssistant />
     </div>
   )
 }

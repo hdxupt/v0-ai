@@ -1,7 +1,8 @@
 "use client"
 
-import { ChevronDown, LogOut, RefreshCw, User } from "lucide-react"
+import { ChevronDown, LogOut, RefreshCw, User, Monitor, Moon, Sun, Palette, Check } from "lucide-react"
 import Link from "next/link"
+import { useTheme } from "next-themes"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
   DropdownMenu,
@@ -9,12 +10,16 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useAuth } from "@/components/auth/auth-provider"
 
 export function UserMenu() {
   const { user, logout } = useAuth()
+  const { theme, setTheme } = useTheme()
   if (!user) return null
   const sub =
     user.role === "teacher"
@@ -54,6 +59,29 @@ export function UserMenu() {
           <User className="w-3.5 h-3.5" />
           账号设置
         </DropdownMenuItem>
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <Palette className="w-3.5 h-3.5" />
+            外观
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className="w-36">
+            <DropdownMenuItem onClick={() => setTheme("light")}>
+              <Sun className="w-3.5 h-3.5" />
+              <span className="flex-1">浅色</span>
+              {theme === "light" && <Check className="w-3.5 h-3.5" />}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setTheme("dark")}>
+              <Moon className="w-3.5 h-3.5" />
+              <span className="flex-1">深色</span>
+              {theme === "dark" && <Check className="w-3.5 h-3.5" />}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setTheme("system")}>
+              <Monitor className="w-3.5 h-3.5" />
+              <span className="flex-1">跟随系统</span>
+              {theme === "system" && <Check className="w-3.5 h-3.5" />}
+            </DropdownMenuItem>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
         <DropdownMenuItem asChild>
           <Link href="/login">
             <RefreshCw className="w-3.5 h-3.5" />

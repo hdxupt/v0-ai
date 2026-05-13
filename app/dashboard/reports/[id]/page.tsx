@@ -1,15 +1,25 @@
+import dynamic from "next/dynamic"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { ChevronLeft, Download, Share2, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
+import { Skeleton } from "@/components/ui/skeleton"
 import { AISummaryCard } from "@/components/reports/ai-summary-card"
-import { ScoreDistributionChart } from "@/components/reports/score-distribution-chart"
-import { KnowledgeRadarChart } from "@/components/reports/knowledge-radar-chart"
 import { StudentStatusPanel } from "@/components/reports/student-status-panel"
 import { TeachingSuggestions } from "@/components/reports/teaching-suggestions"
 import { getTaskById } from "@/lib/mock-data"
+
+// Recharts is heavy (~150kB). Defer it.
+const ScoreDistributionChart = dynamic(
+  () => import("@/components/reports/score-distribution-chart").then((m) => m.ScoreDistributionChart),
+  { loading: () => <Skeleton className="h-[300px] w-full" /> },
+)
+const KnowledgeRadarChart = dynamic(
+  () => import("@/components/reports/knowledge-radar-chart").then((m) => m.KnowledgeRadarChart),
+  { loading: () => <Skeleton className="h-[300px] w-full" /> },
+)
 
 export default async function ReportPage({
   params,

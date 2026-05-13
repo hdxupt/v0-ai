@@ -159,7 +159,7 @@ export function DashboardContent() {
             </span>
           </div>
           <p className="text-sm text-muted-foreground text-pretty">
-            {user.name}老师，欢迎回来。所有数据通过 Supabase 实时同步至学生端
+            {user.name}，欢迎回来。所有数据通过 Supabase 实时同步至学生端
           </p>
         </div>
 

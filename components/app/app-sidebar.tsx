@@ -6,29 +6,21 @@ import {
   LayoutDashboard,
   ClipboardList,
   Sparkles,
-  Users,
-  BookOpenCheck,
-  BarChart3,
-  Settings,
-  LifeBuoy,
-  GraduationCap,
   Smartphone,
+  GraduationCap,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-const mainNav = [
-  { label: "学情看板", href: "/dashboard", icon: LayoutDashboard },
-  { label: "作业管理", href: "/dashboard?tab=tasks", icon: ClipboardList },
-  { label: "AI 批阅工作台", href: "/dashboard/grading/s08", icon: Sparkles },
-  { label: "学生端预览", href: "/student", icon: Smartphone },
-  { label: "班级管理", href: "#", icon: Users },
-  { label: "题库中心", href: "#", icon: BookOpenCheck },
-  { label: "数据中心", href: "#", icon: BarChart3 },
-]
+type NavItem = {
+  label: string
+  href: string
+  icon: typeof LayoutDashboard
+  disabled?: boolean
+}
 
-const bottomNav = [
-  { label: "设置", href: "#", icon: Settings },
-  { label: "帮助与反馈", href: "#", icon: LifeBuoy },
+const mainNav: NavItem[] = [
+  { label: "学情看板", href: "/dashboard", icon: LayoutDashboard },
+  { label: "学生端预览", href: "/student", icon: Smartphone },
 ]
 
 export function AppSidebar() {
@@ -49,13 +41,17 @@ export function AppSidebar() {
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 overflow-y-auto">
-        <div className="px-2 mb-2 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">主功能</div>
+        <div className="px-2 mb-2 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+          主功能
+        </div>
         <ul className="flex flex-col gap-0.5">
           {mainNav.map((item) => {
             const active =
               item.href === "/dashboard"
-                ? pathname === "/dashboard"
-                : pathname.startsWith(item.href.split("?")[0]) && item.href !== "#"
+                ? pathname === "/dashboard" ||
+                  pathname.startsWith("/dashboard/tasks") ||
+                  pathname.startsWith("/dashboard/grading")
+                : pathname.startsWith(item.href)
             return (
               <li key={item.label}>
                 <Link
@@ -76,20 +72,37 @@ export function AppSidebar() {
         </ul>
 
         <div className="mt-6 px-2 mb-2 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-          其他
+          快捷入口
         </div>
         <ul className="flex flex-col gap-0.5">
-          {bottomNav.map((item) => (
-            <li key={item.label}>
-              <Link
-                href={item.href}
-                className="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm text-sidebar-foreground hover:bg-sidebar-accent/60 transition-colors"
-              >
-                <item.icon className="w-4 h-4 shrink-0" />
-                <span className="truncate">{item.label}</span>
-              </Link>
-            </li>
-          ))}
+          <li>
+            <Link
+              href="/dashboard"
+              className={cn(
+                "flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm transition-colors",
+                pathname.startsWith("/dashboard/grading")
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                  : "text-sidebar-foreground hover:bg-sidebar-accent/60",
+              )}
+            >
+              <Sparkles className="w-4 h-4 shrink-0" />
+              <span className="truncate">AI 批阅工作台</span>
+            </Link>
+          </li>
+          <li>
+            <Link
+              href="/dashboard"
+              className={cn(
+                "flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm transition-colors",
+                pathname.startsWith("/dashboard/tasks")
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                  : "text-sidebar-foreground hover:bg-sidebar-accent/60",
+              )}
+            >
+              <ClipboardList className="w-4 h-4 shrink-0" />
+              <span className="truncate">作业进度跟踪</span>
+            </Link>
+          </li>
         </ul>
       </nav>
 
@@ -100,7 +113,7 @@ export function AppSidebar() {
           <span className="text-xs font-medium text-sidebar-foreground">AI 助教</span>
         </div>
         <p className="text-[11px] leading-relaxed text-muted-foreground">
-          今日已为您批改 <span className="text-foreground font-medium">128</span> 份作业
+          点击右下角悬浮按钮开始智能问答，或一键生成讲评建议
         </p>
       </div>
     </aside>

@@ -1,17 +1,9 @@
 "use client"
 
-import { Bell, Search, ChevronDown } from "lucide-react"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Button } from "@/components/ui/button"
+import { Bell, Search } from "lucide-react"
 import { Input } from "@/components/ui/input"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+import { Button } from "@/components/ui/button"
+import { UserMenu } from "./user-menu"
 
 export function AppHeader() {
   return (
@@ -39,30 +31,8 @@ export function AppHeader() {
           <span className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-destructive" />
         </Button>
 
-        {/* User menu */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="flex items-center gap-2 pl-1.5 pr-2 py-1 rounded-md hover:bg-muted transition-colors">
-              <Avatar className="w-7 h-7">
-                <AvatarFallback className="bg-primary text-primary-foreground text-xs">王</AvatarFallback>
-              </Avatar>
-              <div className="hidden md:flex flex-col leading-tight items-start">
-                <span className="text-xs font-medium">王老师</span>
-                <span className="text-[10px] text-muted-foreground">数学组 · 高二 (3) 班</span>
-              </div>
-              <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-52">
-            <DropdownMenuLabel>个人中心</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>账号设置</DropdownMenuItem>
-            <DropdownMenuItem>教学偏好</DropdownMenuItem>
-            <DropdownMenuItem>消息通知</DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive">退出登录</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {/* User menu - shows real logged-in user with theme switcher */}
+        <UserMenu />
       </div>
     </header>
   )

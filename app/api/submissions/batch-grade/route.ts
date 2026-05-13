@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth-server"
-import { supabase } from "@/lib/supabase/client"
+import { createClient } from "@/lib/supabase/client"
 import { updateSubmissionGrading } from "@/lib/db"
+
+const sb = createClient()
 
 function mockAIGrade(seed: string) {
   let h = 0
@@ -50,7 +52,7 @@ export async function POST(req: NextRequest) {
   }
 
   // 查 submissions 及关联 task + student 信息
-  const { data: submissions, error } = await supabase()
+  const { data: submissions, error } = await sb
     .from("submissions")
     .select("id, task_id, student_id")
     .in("id", ids)
@@ -58,17 +60,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "submissions not found" }, { status: 404 })
   }
 
-  const taskIds = Array.from(new Set(submissions.map((s) => s.task_id)))
-  const studentIds = Array.from(new Set(submissions.map((s) => s.student_id)))
+  const taskIds = Array.from(new Set(submissions.map((s: any) => s.task_id)))
+  const studentIds = Array.from(new Set(submissions.map((s: any) => s.student_id)))
   const [{ data: tasks }, { data: students }] = await Promise.all([
-    supabase().from("tasks").select("id, title, class_ids").in("id", taskIds),
-    supabase().from("app_users").select("id, name, class_id").in("id", studentIds),
+    sb.from("tasks").select("id, title, class_ids").in("id", taskIds),
+    sb.from("app_users").select("id, name, class_id").in("id", studentIds),
   ])
   const taskMap = new Map((tasks ?? []).map((t: any) => [t.id, t]))
   const studentMap = new Map((students ?? []).map((s: any) => [s.id, s]))
 
   const results: Array<{ id: string; score: number }> = []
-  for (const sub of submissions) {
+  for (const sub of submissions as any[]) {
     const task = taskMap.get(sub.task_id) as any
     const stu = studentMap.get(sub.student_id) as any
     if (!task || !stu) continue

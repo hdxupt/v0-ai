@@ -1,12 +1,12 @@
 import { streamText, convertToModelMessages, type UIMessage } from "ai"
 import { getCurrentUser } from "@/lib/auth-server"
-import { supabase } from "@/lib/supabase/client"
+import { createClient } from "@/lib/supabase/client"
 
 export const maxDuration = 30
 
 async function buildClassSnapshot(teacherId: string, teacherClassId: string | null) {
   if (!teacherClassId) return "暂无班级上下文。"
-  const sb = supabase()
+  const sb = createClient()
   const [{ data: students }, { data: tasks }, { data: subs }] = await Promise.all([
     sb.from("app_users").select("id, name").eq("role", "student").eq("class_id", teacherClassId),
     sb

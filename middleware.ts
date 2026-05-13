@@ -56,6 +56,6 @@ export const config = {
      * Match all request paths except:
      * - _next/static, _next/image, favicon, public assets, api auth callbacks
      */
-    "/((?!_next/static|_next/image|favicon.ico|images|api/health).*)",
+    "/((?!_next/static|_next/image|favicon.ico|images|manifest.webmanifest|icon-|api/health).*)",
   ],
 }

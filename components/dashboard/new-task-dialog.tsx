@@ -25,7 +25,6 @@ import {
 } from "@/components/ui/select"
 import { Plus, Sparkles, Clock, Users } from "lucide-react"
 import { toast } from "sonner"
-import { createTask } from "@/lib/db"
 import type { ClassInfo, AppUser } from "@/lib/types"
 
 const SUBJECTS = ["数学", "语文", "英语", "物理", "化学", "生物"]
@@ -76,17 +75,22 @@ export function NewTaskDialog({
     setSubmitting(true)
     try {
       const dueAt = new Date(`${dueDate}T${dueTime}:00`).toISOString()
-      await createTask({
-        title: title.trim(),
-        subject,
-        class_ids: classIds,
-        requirements: requirements.trim(),
-        notes: notes.trim() || null,
-        due_at: dueAt,
-        estimated_minutes: estimatedMinutes,
-        teacher_id: teacher.id,
-        teacher_name: teacher.name,
+      const res = await fetch("/api/tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: title.trim(),
+          subject,
+          class_ids: classIds,
+          requirements: requirements.trim(),
+          notes: notes.trim() || null,
+          due_at: dueAt,
+          estimated_minutes: estimatedMinutes,
+          teacher_id: teacher.id,
+          teacher_name: teacher.name,
+        }),
       })
+      if (!res.ok) throw new Error((await res.json()).error || "请求失败")
       const totalStudents = classes
         .filter((c) => classIds.includes(c.id))
         .reduce((s, c) => s + c.student_count, 0)

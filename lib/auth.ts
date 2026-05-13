@@ -1,3 +1,4 @@
+import { cookies } from "next/headers"
 import type { AppUser } from "./types"
 
 export const AUTH_COOKIE_NAME = "sewise_session_user"
@@ -20,4 +21,10 @@ export function deserializeUser(raw: string | undefined | null): AppUser | null 
   } catch {
     return null
   }
+}
+
+/** Server-side: read current user from cookie. Returns null if not signed in. */
+export async function getCurrentUser(): Promise<AppUser | null> {
+  const store = await cookies()
+  return deserializeUser(store.get(AUTH_COOKIE_NAME)?.value)
 }

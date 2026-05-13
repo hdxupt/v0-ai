@@ -8,7 +8,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -25,33 +24,36 @@ export function ReminderDialog({
   submittedStudentIds,
   teacherName,
   teacherId,
-  trigger,
+  onClose,
 }: {
   task: Task
   submittedStudentIds: string[]
   teacherName: string
   teacherId: string
-  trigger: React.ReactNode
+  onClose: () => void
 }) {
-  const [open, setOpen] = useState(false)
   const [pendingStudents, setPendingStudents] = useState<AppUser[]>([])
   const [selected, setSelected] = useState<string[]>([])
   const [message, setMessage] = useState("")
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
-    if (!open) return
+    let cancelled = false
     ;(async () => {
       const allByClass: AppUser[][] = await Promise.all(
         task.class_ids.map((cid) => listStudentsByClass(cid)),
       )
+      if (cancelled) return
       const all = allByClass.flat()
       const pending = all.filter((u) => !submittedStudentIds.includes(u.id))
       setPendingStudents(pending)
       setSelected(pending.map((u) => u.id))
       setMessage(`请尽快提交《${task.title}》作业，老师在等你哦~`)
     })()
-  }, [open, task, submittedStudentIds])
+    return () => {
+      cancelled = true
+    }
+  }, [task, submittedStudentIds])
 
   function toggleAll() {
     if (selected.length === pendingStudents.length) setSelected([])
@@ -75,7 +77,7 @@ export function ReminderDialog({
         message,
       })
       toast.success(`已向 ${selected.length} 名学生发送催交通知`)
-      setOpen(false)
+      onClose()
     } catch (err) {
       console.error("[v0] send reminders error:", err)
       toast.error("发送失败，请重试")
@@ -85,8 +87,7 @@ export function ReminderDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -162,7 +163,7 @@ export function ReminderDialog({
         </div>
 
         <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={() => setOpen(false)}>
+          <Button variant="outline" onClick={onClose}>
             取消
           </Button>
           <Button onClick={handleSend} disabled={selected.length === 0 || submitting}>

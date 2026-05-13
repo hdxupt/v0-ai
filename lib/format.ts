@@ -11,6 +11,11 @@ export function formatRelativeTime(iso: string): string {
   return date.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" })
 }
 
+export function formatDateTime(iso: string): string {
+  const d = new Date(iso)
+  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`
+}
+
 export function formatDueDate(iso: string): string {
   const d = new Date(iso)
   return `${d.getMonth() + 1}月${d.getDate()}日 ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`

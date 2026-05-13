@@ -1,0 +1,71 @@
+"use client"
+
+import { ChevronDown, LogOut, RefreshCw, User } from "lucide-react"
+import Link from "next/link"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { useAuth } from "@/components/auth/auth-provider"
+
+export function UserMenu() {
+  const { user, logout } = useAuth()
+  if (!user) return null
+  const sub =
+    user.role === "teacher"
+      ? "数学组 · 教师"
+      : `学号 ${user.student_no ?? "—"}`
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className="flex items-center gap-2 pl-1.5 pr-2 py-1 rounded-md hover:bg-muted transition-colors">
+          <Avatar className="w-7 h-7">
+            <AvatarFallback
+              className="text-white text-xs"
+              style={{ backgroundColor: user.avatar_color }}
+            >
+              {user.name.charAt(0)}
+            </AvatarFallback>
+          </Avatar>
+          <div className="hidden md:flex flex-col leading-tight items-start">
+            <span className="text-xs font-medium">{user.name}</span>
+            <span className="text-[10px] text-muted-foreground">{sub}</span>
+          </div>
+          <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-52">
+        <DropdownMenuLabel>
+          <div className="flex flex-col">
+            <span className="text-xs font-medium">{user.name}</span>
+            <span className="text-[10px] text-muted-foreground font-normal">
+              {user.role === "teacher" ? "教师端" : "学生端"}
+            </span>
+          </div>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem disabled>
+          <User className="w-3.5 h-3.5" />
+          账号设置
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href="/login">
+            <RefreshCw className="w-3.5 h-3.5" />
+            切换账号
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem className="text-destructive" onClick={logout}>
+          <LogOut className="w-3.5 h-3.5" />
+          退出登录
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}

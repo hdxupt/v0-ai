@@ -1,4 +1,4 @@
-import { getCurrentUser } from "@/lib/auth"
+import { getCurrentUser } from "@/lib/auth-server"
 import { getTask, getSubmissionByStudentTask } from "@/lib/db"
 import { redirect, notFound } from "next/navigation"
 import { SubmitForm } from "@/components/student/submit-form"

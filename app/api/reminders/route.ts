@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getCurrentUser } from "@/lib/auth"
+import { getCurrentUser } from "@/lib/auth-server"
 import { getTask, sendReminders } from "@/lib/db"
 
 export async function POST(request: NextRequest) {

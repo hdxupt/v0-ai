@@ -1,4 +1,4 @@
-import { getCurrentUser } from "@/lib/auth"
+import { getCurrentUser } from "@/lib/auth-server"
 import { getSubmission, getTask } from "@/lib/db"
 import { redirect, notFound } from "next/navigation"
 import Link from "next/link"

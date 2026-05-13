@@ -1,4 +1,4 @@
-import { getCurrentUser } from "@/lib/auth"
+import { getCurrentUser } from "@/lib/auth-server"
 import { getTask, listSubmissionsByTask, listStudentsByClass } from "@/lib/db"
 import { redirect, notFound } from "next/navigation"
 import { TaskProgress } from "@/components/dashboard/task-progress"

@@ -4,9 +4,12 @@ import { redirect, notFound } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, Sparkles, CheckCircle2 } from "lucide-react"
+import { ArrowLeft, Sparkles, CheckCircle2, AlertCircle, AlertTriangle, TrendingDown } from "lucide-react"
 import { ImageGallery } from "@/components/student/image-gallery"
 import { formatDateTime } from "@/lib/format"
+import type { AIIssueAnnotation, WeakPoint } from "@/lib/types"
+
+export const dynamic = "force-dynamic"
 
 export default async function ResultPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -29,6 +32,9 @@ export default async function ResultPage({ params }: { params: Promise<{ id: str
     : ratio >= 0.75 ? "text-primary"
     : ratio >= 0.6 ? "text-amber-600 dark:text-amber-400"
     : "text-destructive"
+
+  const issues = (submission.ai_issues ?? []) as AIIssueAnnotation[]
+  const weakPoints = (submission.weak_points ?? []) as WeakPoint[]
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
@@ -78,19 +84,75 @@ export default async function ResultPage({ params }: { params: Promise<{ id: str
         </div>
       ) : null}
 
+      {/* AI issue list */}
+      {issues.length > 0 ? (
+        <div className="rounded-2xl border bg-card p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-primary" />
+              AI 标注的问题点
+            </h2>
+            <Badge variant="secondary" className="text-[10px]">{issues.length} 处</Badge>
+          </div>
+          <ul className="space-y-2">
+            {issues.map((issue, idx) => (
+              <li key={issue.id} className="flex items-start gap-2 p-2.5 rounded-md border bg-muted/30 text-xs">
+                <div
+                  className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-semibold text-white ${
+                    issue.type === "error" ? "bg-destructive" : "bg-amber-500"
+                  }`}
+                >
+                  {idx + 1}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1 mb-0.5">
+                    {issue.type === "error" ? (
+                      <AlertCircle className="w-3 h-3 text-destructive" />
+                    ) : (
+                      <AlertTriangle className="w-3 h-3 text-amber-500" />
+                    )}
+                    <span className="font-medium">
+                      {issue.type === "error" ? "错误" : "注意"}
+                    </span>
+                  </div>
+                  <p className="text-muted-foreground leading-relaxed">{issue.message}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       {/* Weak points */}
-      {Array.isArray(submission.weak_points) && submission.weak_points.length > 0 ? (
-        <div className="rounded-2xl border bg-card p-5 space-y-4">
-          <h2 className="font-semibold">你的薄弱知识点</h2>
-          {(submission.weak_points as any[]).map((w, i) => (
-            <div key={i} className="rounded-lg border bg-muted/30 p-3 space-y-2">
-              <div className="flex items-center justify-between">
-                <p className="font-medium text-sm">{w.name}</p>
-                <Badge variant="outline" className="text-[10px]">失 {w.lost_points} 分</Badge>
+      {weakPoints.length > 0 ? (
+        <div className="rounded-2xl border bg-card p-5 space-y-3">
+          <h2 className="font-semibold flex items-center gap-2">
+            <TrendingDown className="w-4 h-4 text-amber-500" />
+            你的薄弱知识点
+          </h2>
+          <div className="space-y-3">
+            {weakPoints.map((w, i) => (
+              <div key={i} className="rounded-lg border bg-muted/30 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="font-medium text-sm">{w.name}</p>
+                  <Badge variant="outline" className="text-[10px]">失 {w.lostPoints} 分</Badge>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <p className="text-muted-foreground">你的得分</p>
+                    <p className="font-medium tabular-nums">{w.myScore}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">班级平均</p>
+                    <p className="font-medium tabular-nums">{w.classAverage}</p>
+                  </div>
+                </div>
+                {w.reason ? (
+                  <p className="text-xs text-muted-foreground leading-relaxed pt-1 border-t">{w.reason}</p>
+                ) : null}
               </div>
-              {w.reason ? <p className="text-xs text-muted-foreground leading-relaxed">{w.reason}</p> : null}
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       ) : null}
 

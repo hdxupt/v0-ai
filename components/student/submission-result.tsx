@@ -230,14 +230,13 @@ function ImageGallery({
       <p className="text-xs text-muted-foreground py-8 text-center">无图片</p>
     )
   }
-  const activePath = pathnames[activeIdx]
-  const src = `/api/file?pathname=${encodeURIComponent(activePath)}`
+  const src = pathnames[activeIdx]
 
   return (
     <div className="space-y-3">
       <div className="relative rounded-lg overflow-hidden border border-border bg-muted aspect-[4/3]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={src || "/placeholder.svg"} alt="答卷图片" className="w-full h-full object-contain" />
+        <img src={src || "/placeholder.svg"} alt="答卷图片" className="w-full h-full object-contain" crossOrigin="anonymous" />
         {/* Render AI issue boxes only on first image for simplicity */}
         {activeIdx === 0 &&
           annotations?.map((issue, idx) => (
@@ -281,9 +280,10 @@ function ImageGallery({
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={`/api/file?pathname=${encodeURIComponent(p)}`}
+                src={p || "/placeholder.svg"}
                 alt={`第 ${idx + 1} 张`}
                 className="w-full h-full object-cover"
+                crossOrigin="anonymous"
               />
             </button>
           ))}

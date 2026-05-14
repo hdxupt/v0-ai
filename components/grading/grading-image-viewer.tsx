@@ -198,6 +198,23 @@ export function GradingImageViewer({
             {visibleBoxes.map((box, idx) => {
               const style = TYPE_STYLE[box.type] ?? TYPE_STYLE.error
               const Icon = style.Icon
+
+              // ---- 智能 tooltip 定位：根据 box 在图片容器中的位置自动选侧 ----
+              const cx = box.x + box.w / 2 // box 横向中心 (%)
+              const cy = box.y + box.h / 2 // box 纵向中心 (%)
+              // 横向：中心点超过 55% → 弹左侧，否则弹右侧
+              const horiz: "left" | "right" = cx > 55 ? "left" : "right"
+              // 纵向：靠顶部强制向下展开；靠底部强制向上展开；中段垂直居中
+              const vert: "top" | "middle" | "bottom" =
+                cy < 18 ? "top" : cy > 82 ? "bottom" : "middle"
+
+              const tooltipPos = cn(
+                horiz === "right" ? "left-full ml-2" : "right-full mr-2",
+                vert === "top" && "top-0",
+                vert === "bottom" && "bottom-0",
+                vert === "middle" && "top-1/2 -translate-y-1/2",
+              )
+
               return (
                 <div
                   key={box.id}
@@ -226,9 +243,10 @@ export function GradingImageViewer({
                   </div>
                   <div
                     className={cn(
-                      "absolute left-full ml-2 top-1/2 -translate-y-1/2 z-10 min-w-[180px] max-w-[280px] p-2 rounded-md shadow-md border bg-card",
-                      "opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none",
+                      "absolute z-20 w-[min(280px,42vw)] min-w-[180px] p-2 rounded-md shadow-lg border bg-card",
+                      "opacity-0 group-hover:opacity-100 group-hover:z-30 transition-opacity pointer-events-none",
                       style.border,
+                      tooltipPos,
                     )}
                   >
                     <div className={cn("flex items-center gap-1.5 text-[11px] font-medium mb-1", style.text)}>

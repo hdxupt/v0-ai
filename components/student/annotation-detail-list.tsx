@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { AlertCircle, Sparkles, CircleAlert, MinusCircle } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
@@ -58,11 +58,24 @@ function AnnotationCard({
   onLeave: () => void
 }) {
   const [expanded, setExpanded] = useState(false)
+  const cardRef = useRef<HTMLDivElement | null>(null)
+
+  // 当外部（图上 hover）激活本卡片时，自动把它滚入视图
+  useEffect(() => {
+    if (isActive && cardRef.current) {
+      cardRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+        inline: "nearest",
+      })
+    }
+  }, [isActive])
 
   const tone = toneOf(box.type)
 
   return (
     <div
+      ref={cardRef}
       onMouseEnter={onEnter}
       onMouseLeave={onLeave}
       onFocus={onEnter}

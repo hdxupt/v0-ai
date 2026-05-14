@@ -8,6 +8,7 @@ import {
 } from "./prompts"
 import { GradingResultSchema, type GradingResult } from "./schemas"
 import { AI_MODELS, GRADING_TIMEOUT_MS } from "./config"
+import { getGateway } from "./gateway"
 
 /**
  * 从私有 Blob 拉取图片字节，转成 AI SDK 6 可以直接喂的 data URL。
@@ -99,8 +100,9 @@ export async function gradeSubmissionWithAI(
   const timer = setTimeout(() => controller.abort(), GRADING_TIMEOUT_MS)
 
   try {
+    const gateway = getGateway()
     const { object } = await generateObject({
-      model: AI_MODELS.grading,
+      model: gateway(AI_MODELS.grading),
       schema: GradingResultSchema,
       system,
       messages: [

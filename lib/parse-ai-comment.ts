@@ -103,7 +103,8 @@ export function parseAiComment(raw: string | null | undefined): AiCommentStructu
   let firstMark = t.search(/第一[，,、：:]/)
   let problemPattern: "cn" | "num" = "cn"
   if (firstMark < 0) {
-    const numIdx = t.search(/第[1１]题[，,、：:]/)
+    // 不要求"第1题"后面紧跟标点，但要排除"第1题—第6题"枚举式引用（用 negative lookahead 避免 "第1，2,3题" 之类的写法误触）
+    const numIdx = t.search(/第[1１]题(?!\s*[-—、,，]\s*第)/)
     if (numIdx >= 0) {
       firstMark = numIdx
       problemPattern = "num"

@@ -195,14 +195,42 @@ export function parseAiComment(raw: string | null | undefined): AiCommentStructu
   }
 
   // ---------- 4. action ----------
+  // 对 num 模式：从最后一个 problem body 末尾后再找 action 锚，避免抓到题内嵌入式"建议..."
   let action = ""
-  if (actionMark >= 0) {
-    const end = encMark > actionMark ? encMark : t.length
-    action = t.slice(actionMark, end).trim()
-    // 去掉"建议接下来这样做："这种前缀，让内容更纯净
+  let effectiveActionMark = actionMark
+  if (problemPattern === "num" && problems.length > 0) {
+    // 整段尾部减去 encouragement 段后的纯尾巴
+    const tail = encMark > firstMark ? t.slice(firstMark, encMark) : t.slice(firstMark)
+    // 把最后一道题的标题在 tail 中再次定位，然后只搜它之后的部分
+    const lastIdx = problems[problems.length - 1].index
+    const lastAnchor = tail.lastIndexOf(`第${lastIdx}题`)
+    if (lastAnchor >= 0) {
+      // tail 内向后找 action 锚
+      const sub = tail.slice(lastAnchor)
+      const subMark = sub.search(
+        /(?:建议接下来(?:这样做)?|建议你?这样做|建议接下来[:：]|后续(?:可以|建议))/,
+      )
+      effectiveActionMark = subMark >= 0 ? firstMark + lastAnchor + subMark : -1
+    } else {
+      effectiveActionMark = -1
+    }
+  }
+  if (effectiveActionMark >= 0) {
+    const end = encMark > effectiveActionMark ? encMark : t.length
+    action = t.slice(effectiveActionMark, end).trim()
     action = action
       .replace(/^(?:建议(?:接下来|你)?这样做[:：]?\s*)/, "")
+      .replace(/^(?:建议接下来[:：]?\s*)/, "")
       .replace(/^(?:建议[：:]\s*)/, "")
+      .trim()
+  }
+
+  // 清理每个 problem body 尾部残留的连接词（"但"、"但是"、"而"等不完整短句）
+  for (const p of problems) {
+    p.body = p.body
+      .replace(/\s*但是?$/, "")
+      .replace(/\s*而$/, "")
+      .replace(/\s*[，,。]$/, "")
       .trim()
   }
 

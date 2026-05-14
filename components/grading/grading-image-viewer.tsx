@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import type { ViewerBox } from "@/lib/types"
 import { formatDateTime } from "@/lib/format"
+import { toFileSrc } from "@/lib/blob-url"
 
 /**
  * 按 bbox type 选样式。
@@ -183,7 +184,7 @@ export function GradingImageViewer({
             {url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={url || "/placeholder.svg"}
+                src={toFileSrc(url)}
                 alt={`作业原图 第 ${currentIndex + 1} 页`}
                 className="w-full h-auto block"
                 crossOrigin="anonymous"

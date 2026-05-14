@@ -8,6 +8,7 @@ import { Progress } from "@/components/ui/progress"
 import { cn } from "@/lib/utils"
 import { formatRelativeTime } from "@/lib/format"
 import { toViewerBoxes, normalizeWeakPoints, type Submission, type Task, type ViewerBox } from "@/lib/types"
+import { toFileSrc } from "@/lib/blob-url"
 
 export function SubmissionResult({ submission, task }: { submission: Submission; task: Task }) {
   const isGraded = submission.status === "graded"
@@ -222,7 +223,7 @@ function ImageGallery({
     <div className="space-y-3">
       <div className="relative rounded-lg overflow-hidden border border-border bg-muted aspect-[4/3]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={src || "/placeholder.svg"} alt="答卷图片" className="w-full h-full object-contain" crossOrigin="anonymous" />
+        <img src={toFileSrc(src)} alt="答卷图片" className="w-full h-full object-contain" />
         {/* Render AI issue boxes only on first image for simplicity */}
         {activeIdx === 0 &&
           annotations?.map((box, idx) => {

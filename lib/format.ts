@@ -1,3 +1,31 @@
+/**
+ * 统一用东八区（Asia/Shanghai）展示日期，避免 SSR(UTC) 与浏览器(+08:00) 的 hydration mismatch。
+ * 所有显式的日期/时间格式化都走 Intl.DateTimeFormat 并指定 timeZone。
+ */
+const SH = "Asia/Shanghai"
+
+const monthDayHourMinute = new Intl.DateTimeFormat("zh-CN", {
+  timeZone: SH,
+  month: "numeric",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+})
+
+const monthDay = new Intl.DateTimeFormat("zh-CN", {
+  timeZone: SH,
+  month: "numeric",
+  day: "numeric",
+})
+
+function partsOf(date: Date) {
+  const parts = monthDayHourMinute.formatToParts(date)
+  const map: Record<string, string> = {}
+  for (const p of parts) if (p.type !== "literal") map[p.type] = p.value
+  return map // { month, day, hour, minute }
+}
+
 export function formatRelativeTime(iso: string): string {
   const date = new Date(iso)
   const now = Date.now()
@@ -8,17 +36,17 @@ export function formatRelativeTime(iso: string): string {
   if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`
   if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`
   if (diff < 86400 * 7) return `${Math.floor(diff / 86400)} 天前`
-  return date.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" })
+  return monthDay.format(date)
 }
 
 export function formatDateTime(iso: string): string {
-  const d = new Date(iso)
-  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`
+  const p = partsOf(new Date(iso))
+  return `${p.month}/${p.day} ${p.hour}:${p.minute}`
 }
 
 export function formatDueDate(iso: string): string {
-  const d = new Date(iso)
-  return `${d.getMonth() + 1}月${d.getDate()}日 ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`
+  const p = partsOf(new Date(iso))
+  return `${p.month}月${p.day}日 ${p.hour}:${p.minute}`
 }
 
 export function getCountdown(iso: string): { text: string; urgent: boolean; overdue: boolean } {

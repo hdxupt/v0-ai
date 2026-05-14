@@ -4,7 +4,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { AUTH_COOKIE_NAME, deserializeUser } from "@/lib/auth"
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]
-const MAX_SIZE = 6 * 1024 * 1024 // 6 MB per file
+const MAX_SIZE = 8 * 1024 * 1024 // 8 MB per file (iPhone HEIC photos can be ~7MB)
 
 export async function POST(request: NextRequest) {
   try {
@@ -25,23 +25,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `不支持的文件类型: ${file.type}` }, { status: 400 })
     }
     if (file.size > MAX_SIZE) {
-      return NextResponse.json({ error: "文件过大（限 6MB）" }, { status: 400 })
+      return NextResponse.json({ error: "文件过大（限 8MB）" }, { status: 400 })
     }
 
     const ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg"
     const safeTask = (taskId ?? "misc").replace(/[^a-zA-Z0-9_-]/g, "_")
     const pathname = `submissions/${safeTask}/${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
 
+    // Blob 存储为 private，需通过 /api/file 鉴权后下发
     const blob = await put(pathname, file, {
-      access: "public",
+      access: "private",
       contentType: file.type || "image/jpeg",
       addRandomSuffix: false,
     })
 
-    // 同时返回 url 和 pathname，url 用于显示，pathname 兼容旧 API
-    return NextResponse.json({ url: blob.url, pathname: blob.url, size: file.size })
-  } catch (error) {
+    // 仅返回 pathname；前端通过 /api/file?pathname= 渲染
+    return NextResponse.json({ pathname: blob.pathname, size: file.size })
+  } catch (error: any) {
     console.error("[v0] upload error:", error)
-    return NextResponse.json({ error: "上传失败，请重试" }, { status: 500 })
+    return NextResponse.json(
+      { error: error?.message ?? "上传失败，请重试" },
+      { status: 500 },
+    )
   }
 }

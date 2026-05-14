@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { X } from "lucide-react"
+import { toFileSrc } from "@/lib/blob-url"
 
 export function ImageGallery({ pathnames }: { pathnames: string[] }) {
   const [active, setActive] = useState<string | null>(null)
@@ -17,10 +18,9 @@ export function ImageGallery({ pathnames }: { pathnames: string[] }) {
             className="relative aspect-square overflow-hidden rounded-lg border bg-muted group"
           >
             <img
-              src={p || "/placeholder.svg"}
+              src={toFileSrc(p)}
               alt={`第 ${idx + 1} 张`}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-              crossOrigin="anonymous"
             />
             <div className="absolute top-1 left-1 w-5 h-5 rounded-full bg-foreground/70 text-background text-[10px] font-medium flex items-center justify-center">
               {idx + 1}
@@ -41,10 +41,9 @@ export function ImageGallery({ pathnames }: { pathnames: string[] }) {
             <X className="w-5 h-5" />
           </button>
           <img
-            src={active || "/placeholder.svg"}
+            src={toFileSrc(active)}
             alt="预览"
             className="max-w-full max-h-full object-contain rounded-lg"
-            crossOrigin="anonymous"
           />
         </div>
       ) : null}

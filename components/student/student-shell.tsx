@@ -6,6 +6,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { DeviceStatusBar } from "@/components/student/device-status-bar"
 import { NotificationBell } from "@/components/app/notification-bell"
+import { ThemeToggle } from "@/components/app/theme-toggle"
 import { TaskInbox } from "@/components/student/task-inbox"
 import { SubmissionResult } from "@/components/student/submission-result"
 import { useAuth } from "@/components/auth/auth-provider"
@@ -126,6 +127,7 @@ export function StudentShell({
               刷新
             </Button>
             <NotificationBell />
+            <ThemeToggle size="sm" className="h-8 w-8 p-0" />
             <Button variant="ghost" size="sm" className="text-xs h-8">
               <Mic className="w-3.5 h-3.5" />
               呼出 AI 老师

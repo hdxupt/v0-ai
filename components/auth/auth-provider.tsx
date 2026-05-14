@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useEffect, useState, useCallback } from "react"
+import { createContext, useContext, useState, useCallback } from "react"
 import { AUTH_COOKIE_NAME, AUTH_STORAGE_KEY, serializeUser } from "@/lib/auth"
 import type { AppUser } from "@/lib/types"
 
@@ -23,24 +23,10 @@ export function AuthProvider({
   const [user, setUser] = useState<AppUser | null>(initialUser)
   const [loading, setLoading] = useState(false)
 
-  // Sync between tabs: respond to storage events
-  useEffect(() => {
-    if (typeof window === "undefined") return
-    const onStorage = (e: StorageEvent) => {
-      if (e.key !== AUTH_STORAGE_KEY) return
-      if (!e.newValue) {
-        setUser(null)
-      } else {
-        try {
-          setUser(JSON.parse(e.newValue))
-        } catch {
-          /* ignore */
-        }
-      }
-    }
-    window.addEventListener("storage", onStorage)
-    return () => window.removeEventListener("storage", onStorage)
-  }, [])
+  // 注意：故意不监听 storage 事件——演示时常常需要在两个 tab 同时打开
+  // 学生端和教师端，监听 storage 会导致 tab A 登录后 tab B 也跟着切换。
+  // Cookie 仍然是共享的，所以同一浏览器同一时刻只有一个真实身份，
+  // 演示时建议另一端使用无痕窗口或不同浏览器。
 
   const login = useCallback(
     (u: AppUser) => {

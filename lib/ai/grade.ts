@@ -1,4 +1,5 @@
 import { generateObject } from "ai"
+import { get } from "@vercel/blob"
 import type { Submission, Task } from "@/lib/types"
 import {
   buildGradeSystemPrompt,
@@ -7,6 +8,37 @@ import {
 } from "./prompts"
 import { GradingResultSchema, type GradingResult } from "./schemas"
 import { AI_MODELS, GRADING_TIMEOUT_MS } from "./config"
+
+/**
+ * 从私有 Blob 拉取图片字节，转成 AI SDK 6 可以直接喂的 data URL。
+ * 私有 store 不能让模型直接通过 URL 访问，必须 server 端拿到字节后转 base64。
+ */
+async function fetchBlobAsDataUrl(pathnameOrUrl: string): Promise<string> {
+  // 兼容历史 public URL：直接返回，让 AI SDK 自己抓
+  if (/^https?:\/\//i.test(pathnameOrUrl)) return pathnameOrUrl
+
+  const result = await get(pathnameOrUrl, { access: "private" })
+  if (!result || !result.stream) throw new Error(`图片不存在: ${pathnameOrUrl}`)
+
+  // 把 stream 收成 Buffer
+  const chunks: Uint8Array[] = []
+  const reader = result.stream.getReader()
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    if (value) chunks.push(value)
+  }
+  const totalLen = chunks.reduce((sum, c) => sum + c.byteLength, 0)
+  const buf = new Uint8Array(totalLen)
+  let off = 0
+  for (const c of chunks) {
+    buf.set(c, off)
+    off += c.byteLength
+  }
+  const base64 = Buffer.from(buf).toString("base64")
+  const mime = result.blob.contentType || "image/jpeg"
+  return `data:${mime};base64,${base64}`
+}
 
 export interface AIGradePayload {
   /** 0~100 归一化得分 */
@@ -55,10 +87,13 @@ export async function gradeSubmissionWithAI(
     studentNote: submission.note,
   })
 
+  // 把每张私有图片转成 base64 data URL，再喂给视觉模型
+  const dataUrls = await Promise.all(imageUrls.map((p) => fetchBlobAsDataUrl(p)))
+
   const userContent: Array<
     { type: "text"; text: string } | { type: "image"; image: URL | string }
   > = [{ type: "text", text: userText }]
-  for (const url of imageUrls) userContent.push({ type: "image", image: url })
+  for (const u of dataUrls) userContent.push({ type: "image", image: u })
 
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), GRADING_TIMEOUT_MS)

@@ -7,7 +7,7 @@ import {
   resolveSubject,
 } from "./prompts"
 import { GradingResultSchema, type GradingResult } from "./schemas"
-import { AI_MODELS, GRADING_TIMEOUT_MS } from "./config"
+import { AI_MODELS, GRADING_TIMEOUT_MS, GRADING_MAX_OUTPUT_TOKENS } from "./config"
 import { getGateway } from "./gateway"
 
 /**
@@ -104,6 +104,7 @@ export async function gradeSubmissionWithAI(
     const { object } = await generateObject({
       model: gateway(AI_MODELS.grading),
       schema: GradingResultSchema,
+      maxOutputTokens: GRADING_MAX_OUTPUT_TOKENS,
       system,
       messages: [
         {
@@ -121,6 +122,22 @@ export async function gradeSubmissionWithAI(
 
     const scaledScore = Math.max(0, Math.min(100, object.summary.total_score))
 
+    // -------- 硬过滤：剔除"整行/整段"过大 bbox，避免框选过粗 --------
+    // bounding_box = [y, x, h, w]，单位 0~100。
+    // 拒绝标准：宽 > 60，高 > 15，或面积 > 480。这种框基本是"整行带过"。
+    const MAX_W = 60
+    const MAX_H = 15
+    const MAX_AREA = 480
+    const filteredDetails = object.correction_details.filter((d) => {
+      const bb = d.bounding_box
+      if (!bb || bb.length !== 4) return false
+      const [, , h, w] = bb
+      if (w <= 0 || h <= 0) return false
+      if (w > MAX_W || h > MAX_H) return false
+      if (w * h > MAX_AREA) return false
+      return true
+    })
+
     return {
       score: scaledScore,
       ai_comment: object.teacher_comment,
@@ -130,7 +147,7 @@ export async function gradeSubmissionWithAI(
         model: AI_MODELS.grading,
         graded_subject: subject,
         summary: object.summary,
-        correction_details: object.correction_details,
+        correction_details: filteredDetails,
         radar_analysis: object.radar_analysis,
       },
     }

@@ -19,3 +19,10 @@ export const GRADING_CONCURRENCY = 5
 
 /** 单次批改最长时间 */
 export const GRADING_TIMEOUT_MS = 90_000
+
+/**
+ * 批改时的最大输出 token。
+ * Claude sonnet 默认上限不足以容纳"5~15 个 bbox + 详细 process_analysis + summary + radar + teacher_comment"，
+ * 实测 3.5k 会被截断，提到 6k 给足缓冲。
+ */
+export const GRADING_MAX_OUTPUT_TOKENS = 6000

@@ -72,7 +72,7 @@ export async function gradeSubmissionWithAI(
         {
           role: "user",
           content: userContent,
-          // @ts-expect-error - providerOptions 由 AI Gateway 透传到 Anthropic 实现 prompt caching
+          // providerOptions 由 AI Gateway 透传到 Anthropic 实现 prompt caching
           providerOptions: {
             anthropic: { cacheControl: { type: "ephemeral" } },
           },

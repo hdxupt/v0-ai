@@ -119,11 +119,11 @@ export default async function ResultPage({ params }: { params: Promise<{ id: str
           </h2>
           <KnowledgeRadarChart
             data={[
-              { dimension: "计算基础", score: v2.radar_analysis.basics, fullMark: 100 },
-              { dimension: "逻辑思维", score: v2.radar_analysis.logic, fullMark: 100 },
-              { dimension: "知识掌握", score: v2.radar_analysis.knowledge, fullMark: 100 },
-              { dimension: "应用能力", score: v2.radar_analysis.application, fullMark: 100 },
-              { dimension: "书写规范", score: v2.radar_analysis.presentation, fullMark: 100 },
+              { name: "计算基础", mastery: v2.radar_analysis.basics, errorRate: 100 - v2.radar_analysis.basics },
+              { name: "逻辑思维", mastery: v2.radar_analysis.logic, errorRate: 100 - v2.radar_analysis.logic },
+              { name: "知识掌握", mastery: v2.radar_analysis.knowledge, errorRate: 100 - v2.radar_analysis.knowledge },
+              { name: "应用能力", mastery: v2.radar_analysis.application, errorRate: 100 - v2.radar_analysis.application },
+              { name: "书写规范", mastery: v2.radar_analysis.presentation, errorRate: 100 - v2.radar_analysis.presentation },
             ]}
           />
         </div>

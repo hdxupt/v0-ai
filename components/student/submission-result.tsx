@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { cn } from "@/lib/utils"
 import { formatRelativeTime } from "@/lib/format"
-import type { Submission, Task } from "@/lib/types"
+import { toViewerBoxes, normalizeWeakPoints, type Submission, type Task, type ViewerBox } from "@/lib/types"
 
 export function SubmissionResult({ submission, task }: { submission: Submission; task: Task }) {
   const isGraded = submission.status === "graded"
@@ -88,6 +88,8 @@ function GradedView({ submission, task }: { submission: Submission; task: Task }
   const scorePercent = submission.total_score > 0 ? (submission.score! / submission.total_score) * 100 : 0
   const passLevel = scorePercent >= 60
   const excellent = scorePercent >= 85
+  const viewerBoxes = toViewerBoxes(submission.ai_issues)
+  const weakPoints = normalizeWeakPoints(submission.weak_points)
 
   return (
     <>
@@ -132,7 +134,7 @@ function GradedView({ submission, task }: { submission: Submission; task: Task }
               </div>
               <div className="flex items-center gap-1.5">
                 <Trophy className="w-3.5 h-3.5" />
-                AI 标注 {submission.ai_issues.length} 处
+                AI 标注 {viewerBoxes.length} 处
               </div>
               <div className="flex items-center gap-1.5">
                 <Clock className="w-3.5 h-3.5" />
@@ -168,33 +170,17 @@ function GradedView({ submission, task }: { submission: Submission; task: Task }
       )}
 
       {/* Weak points */}
-      {submission.weak_points && submission.weak_points.length > 0 && (
+      {weakPoints.length > 0 && (
         <Card className="p-5">
           <div className="flex items-center gap-2 mb-3">
             <Target className="w-4 h-4 text-[color:var(--warning)]" />
-            <h3 className="text-sm font-medium">薄弱点分析</h3>
+            <h3 className="text-sm font-medium">薄弱知识点</h3>
           </div>
-          <div className="space-y-3">
-            {submission.weak_points.map((wp, idx) => (
-              <div key={idx} className="rounded-lg border border-border p-3">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-sm font-medium">{wp.name}</span>
-                  <span className="text-xs text-destructive font-medium">
-                    -{wp.lostPoints} 分
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground leading-relaxed mb-2">{wp.reason}</p>
-                <div className="grid grid-cols-2 gap-2 text-[11px]">
-                  <div className="flex items-center justify-between rounded-md bg-muted/50 px-2 py-1">
-                    <span className="text-muted-foreground">我的得分</span>
-                    <span className="tabular-nums font-medium">{wp.myScore}</span>
-                  </div>
-                  <div className="flex items-center justify-between rounded-md bg-muted/50 px-2 py-1">
-                    <span className="text-muted-foreground">班级均分</span>
-                    <span className="tabular-nums font-medium">{wp.classAverage}</span>
-                  </div>
-                </div>
-              </div>
+          <div className="flex flex-wrap gap-1.5">
+            {weakPoints.map((wp, idx) => (
+              <Badge key={idx} variant="outline" className="text-[11px]">
+                {wp}
+              </Badge>
             ))}
           </div>
         </Card>
@@ -211,7 +197,7 @@ function GradedView({ submission, task }: { submission: Submission; task: Task }
             共 {submission.image_urls.length} 张
           </span>
         </div>
-        <ImageGallery pathnames={submission.image_urls} annotations={submission.ai_issues} />
+        <ImageGallery pathnames={submission.image_urls} annotations={viewerBoxes} />
       </Card>
     </>
   )
@@ -222,7 +208,7 @@ function ImageGallery({
   annotations,
 }: {
   pathnames: string[]
-  annotations?: Submission["ai_issues"]
+  annotations?: ViewerBox[]
 }) {
   const [activeIdx, setActiveIdx] = useState(0)
   if (pathnames.length === 0) {
@@ -239,32 +225,41 @@ function ImageGallery({
         <img src={src || "/placeholder.svg"} alt="答卷图片" className="w-full h-full object-contain" crossOrigin="anonymous" />
         {/* Render AI issue boxes only on first image for simplicity */}
         {activeIdx === 0 &&
-          annotations?.map((issue, idx) => (
-            <div
-              key={issue.id}
-              className={cn(
-                "absolute border-2 rounded-sm pointer-events-none",
-                issue.type === "error"
-                  ? "border-destructive bg-destructive/15"
-                  : "border-[color:var(--warning)] bg-[color:var(--warning)]/15",
-              )}
-              style={{
-                left: `${issue.x}%`,
-                top: `${issue.y}%`,
-                width: `${issue.w}%`,
-                height: `${issue.h}%`,
-              }}
-            >
-              <span
-                className={cn(
-                  "absolute -top-1.5 -left-1.5 w-4 h-4 rounded-full text-[9px] font-semibold text-white flex items-center justify-center shadow",
-                  issue.type === "error" ? "bg-destructive" : "bg-[color:var(--warning)]",
-                )}
+          annotations?.map((box, idx) => {
+            const color =
+              box.type === "error" || box.type === "missing"
+                ? "border-destructive bg-destructive/15"
+                : box.type === "highlight"
+                  ? "border-emerald-500 bg-emerald-500/15"
+                  : "border-[color:var(--warning)] bg-[color:var(--warning)]/15"
+            const dot =
+              box.type === "error" || box.type === "missing"
+                ? "bg-destructive"
+                : box.type === "highlight"
+                  ? "bg-emerald-500"
+                  : "bg-[color:var(--warning)]"
+            return (
+              <div
+                key={box.id}
+                className={cn("absolute border-2 rounded-sm pointer-events-none", color)}
+                style={{
+                  left: `${box.x}%`,
+                  top: `${box.y}%`,
+                  width: `${box.w}%`,
+                  height: `${box.h}%`,
+                }}
               >
-                {idx + 1}
-              </span>
-            </div>
-          ))}
+                <span
+                  className={cn(
+                    "absolute -top-1.5 -left-1.5 w-4 h-4 rounded-full text-[9px] font-semibold text-white flex items-center justify-center shadow",
+                    dot,
+                  )}
+                >
+                  {idx + 1}
+                </span>
+              </div>
+            )
+          })}
       </div>
       {pathnames.length > 1 && (
         <div className="flex gap-2 overflow-x-auto">

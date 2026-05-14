@@ -4,12 +4,29 @@ import { redirect, notFound } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, Sparkles, CheckCircle2, AlertCircle, AlertTriangle, TrendingDown } from "lucide-react"
+import { ArrowLeft, Sparkles, CheckCircle2, AlertCircle, AlertTriangle, TrendingDown, Lightbulb } from "lucide-react"
 import { ImageGallery } from "@/components/student/image-gallery"
 import { formatDateTime } from "@/lib/format"
-import type { AIIssueAnnotation, WeakPoint } from "@/lib/types"
+import { isAIGradingV2, toViewerBoxes, normalizeWeakPoints } from "@/lib/types"
+import { KnowledgeRadarChart } from "@/components/reports/knowledge-radar-chart"
 
 export const dynamic = "force-dynamic"
+
+const TYPE_LABEL: Record<string, string> = {
+  error: "错误",
+  partial: "部分正确",
+  highlight: "亮点",
+  missing: "漏答",
+  warning: "提醒",
+}
+
+const TYPE_STYLE: Record<string, { dot: string; icon: typeof AlertCircle }> = {
+  error: { dot: "bg-destructive", icon: AlertCircle },
+  partial: { dot: "bg-amber-500", icon: AlertTriangle },
+  highlight: { dot: "bg-emerald-500", icon: Sparkles },
+  missing: { dot: "bg-zinc-500", icon: AlertCircle },
+  warning: { dot: "bg-amber-500", icon: AlertTriangle },
+}
 
 export default async function ResultPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -33,8 +50,10 @@ export default async function ResultPage({ params }: { params: Promise<{ id: str
     : ratio >= 0.6 ? "text-amber-600 dark:text-amber-400"
     : "text-destructive"
 
-  const issues = (submission.ai_issues ?? []) as AIIssueAnnotation[]
-  const weakPoints = (submission.weak_points ?? []) as WeakPoint[]
+  const aiIssues = submission.ai_issues
+  const v2 = isAIGradingV2(aiIssues) ? aiIssues : null
+  const boxes = toViewerBoxes(aiIssues)
+  const weakPoints = normalizeWeakPoints(submission.weak_points)
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
@@ -65,10 +84,17 @@ export default async function ResultPage({ params }: { params: Promise<{ id: str
           <p className="text-xs text-muted-foreground mt-2">
             批阅于 {submission.graded_at ? formatDateTime(submission.graded_at) : ""}
           </p>
+          {v2 ? (
+            <div className="flex flex-wrap gap-3 mt-4 text-xs text-muted-foreground">
+              <span>识别题目 {v2.summary.total_detected_questions}</span>
+              <span className="text-emerald-600 dark:text-emerald-400">正确 {v2.summary.correct_count}</span>
+              <span className="text-destructive">错误 {v2.summary.wrong_count}</span>
+            </div>
+          ) : null}
         </div>
       </div>
 
-      {/* AI personal comment */}
+      {/* AI teacher comment */}
       {submission.teacher_comment || submission.ai_comment ? (
         <div className="rounded-2xl border bg-gradient-to-br from-primary/[0.06] via-card to-card p-5 space-y-3 relative overflow-hidden">
           <div className="absolute -top-12 -right-12 w-32 h-32 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
@@ -84,41 +110,63 @@ export default async function ResultPage({ params }: { params: Promise<{ id: str
         </div>
       ) : null}
 
+      {/* Radar chart (v2 only) */}
+      {v2 ? (
+        <div className="rounded-2xl border bg-card p-5 space-y-3">
+          <h2 className="text-sm font-semibold flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-primary" />
+            五维能力分析
+          </h2>
+          <KnowledgeRadarChart
+            data={[
+              { dimension: "计算基础", score: v2.radar_analysis.basics, fullMark: 100 },
+              { dimension: "逻辑思维", score: v2.radar_analysis.logic, fullMark: 100 },
+              { dimension: "知识掌握", score: v2.radar_analysis.knowledge, fullMark: 100 },
+              { dimension: "应用能力", score: v2.radar_analysis.application, fullMark: 100 },
+              { dimension: "书写规范", score: v2.radar_analysis.presentation, fullMark: 100 },
+            ]}
+          />
+        </div>
+      ) : null}
+
       {/* AI issue list */}
-      {issues.length > 0 ? (
+      {boxes.length > 0 ? (
         <div className="rounded-2xl border bg-card p-5 space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-primary" />
-              AI 标注的问题点
+              AI 标注的逐题分析
             </h2>
-            <Badge variant="secondary" className="text-[10px]">{issues.length} 处</Badge>
+            <Badge variant="secondary" className="text-[10px]">{boxes.length} 处</Badge>
           </div>
           <ul className="space-y-2">
-            {issues.map((issue, idx) => (
-              <li key={issue.id} className="flex items-start gap-2 p-2.5 rounded-md border bg-muted/30 text-xs">
-                <div
-                  className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-semibold text-white ${
-                    issue.type === "error" ? "bg-destructive" : "bg-amber-500"
-                  }`}
-                >
-                  {idx + 1}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1 mb-0.5">
-                    {issue.type === "error" ? (
-                      <AlertCircle className="w-3 h-3 text-destructive" />
-                    ) : (
-                      <AlertTriangle className="w-3 h-3 text-amber-500" />
-                    )}
-                    <span className="font-medium">
-                      {issue.type === "error" ? "错误" : "注意"}
-                    </span>
+            {boxes.map((box, idx) => {
+              const style = TYPE_STYLE[box.type] ?? TYPE_STYLE.error
+              const Icon = style.icon
+              return (
+                <li key={box.id} className="flex items-start gap-2 p-2.5 rounded-md border bg-muted/30 text-xs">
+                  <div className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-semibold text-white ${style.dot}`}>
+                    {idx + 1}
                   </div>
-                  <p className="text-muted-foreground leading-relaxed">{issue.message}</p>
-                </div>
-              </li>
-            ))}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1 mb-0.5">
+                      <Icon className="w-3 h-3" />
+                      <span className="font-medium">{TYPE_LABEL[box.type] ?? "标注"}</span>
+                      {box.question_text ? (
+                        <span className="ml-1 text-muted-foreground truncate">· {box.question_text}</span>
+                      ) : null}
+                    </div>
+                    <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap">{box.message}</p>
+                    {box.correct_answer ? (
+                      <p className="mt-1 text-[11px] text-foreground/80">
+                        <Lightbulb className="inline w-3 h-3 mr-0.5" />
+                        参考答案：{box.correct_answer}
+                      </p>
+                    ) : null}
+                  </div>
+                </li>
+              )
+            })}
           </ul>
         </div>
       ) : null}
@@ -130,27 +178,9 @@ export default async function ResultPage({ params }: { params: Promise<{ id: str
             <TrendingDown className="w-4 h-4 text-amber-500" />
             你的薄弱知识点
           </h2>
-          <div className="space-y-3">
+          <div className="flex flex-wrap gap-1.5">
             {weakPoints.map((w, i) => (
-              <div key={i} className="rounded-lg border bg-muted/30 p-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <p className="font-medium text-sm">{w.name}</p>
-                  <Badge variant="outline" className="text-[10px]">失 {w.lostPoints} 分</Badge>
-                </div>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div>
-                    <p className="text-muted-foreground">你的得分</p>
-                    <p className="font-medium tabular-nums">{w.myScore}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">班级平均</p>
-                    <p className="font-medium tabular-nums">{w.classAverage}</p>
-                  </div>
-                </div>
-                {w.reason ? (
-                  <p className="text-xs text-muted-foreground leading-relaxed pt-1 border-t">{w.reason}</p>
-                ) : null}
-              </div>
+              <Badge key={i} variant="outline" className="text-[11px]">{w}</Badge>
             ))}
           </div>
         </div>

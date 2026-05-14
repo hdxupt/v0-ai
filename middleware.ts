@@ -23,8 +23,11 @@ export function middleware(request: NextRequest) {
 
   // Allow public paths and assets
   if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
-    // If already logged in, push to their home
-    if (user && pathname === "/login") {
+    // If already logged in, push to their home — unless `?switch=1` is set so user can change account
+    const isSwitchIntent =
+      request.nextUrl.searchParams.get("switch") === "1" ||
+      request.nextUrl.searchParams.has("redirect")
+    if (user && pathname === "/login" && !isSwitchIntent) {
       const url = request.nextUrl.clone()
       url.pathname = user.role === "teacher" ? "/dashboard" : "/student"
       return NextResponse.redirect(url)

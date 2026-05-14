@@ -4,6 +4,7 @@ import { Analytics } from "@vercel/analytics/next"
 import { ThemeProvider } from "@/components/theme-provider"
 import { AuthProvider } from "@/components/auth/auth-provider"
 import { getCurrentUser } from "@/lib/auth-server"
+import { Toaster } from "sonner"
 import "./globals.css"
 
 const geistSans = Geist({
@@ -45,6 +46,14 @@ export default async function RootLayout({
       <body className="font-sans antialiased">
         <ThemeProvider>
           <AuthProvider initialUser={initialUser}>{children}</AuthProvider>
+          <Toaster
+            position="top-center"
+            richColors
+            closeButton
+            toastOptions={{
+              style: { fontSize: "13px" },
+            }}
+          />
         </ThemeProvider>
         {process.env.NODE_ENV === "production" && <Analytics />}
       </body>

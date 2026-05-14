@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { Sparkles, MessageCircleHeart, AlertTriangle, ArrowRight, Heart } from "lucide-react"
+import { Sparkles, MessageCircleHeart, AlertTriangle, ArrowRight, Heart, CheckCircle2 } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
@@ -15,6 +15,8 @@ import { parseAiComment, type AiCommentProblem } from "@/lib/parse-ai-comment"
  */
 export function AiCommentStructured({ comment }: { comment: string }) {
   const data = useMemo(() => parseAiComment(comment), [comment])
+  const highlights = useMemo(() => data.problems.filter((p) => p.kind === "highlight"), [data])
+  const issues = useMemo(() => data.problems.filter((p) => p.kind === "issue"), [data])
 
   // 不能解析时退化展示
   if (!data.parsed) {
@@ -42,7 +44,7 @@ export function AiCommentStructured({ comment }: { comment: string }) {
           </Badge>
         </div>
         <span className="text-[10px] text-muted-foreground tabular-nums">
-          {data.problems.length} 个核心问题 · {data.action ? "含行动方案" : "暂无行动方案"}
+          {highlights.length} 个亮点 · {issues.length} 个待突破 · {data.action ? "含行动方案" : "暂无行动方案"}
         </span>
       </div>
 
@@ -57,14 +59,25 @@ export function AiCommentStructured({ comment }: { comment: string }) {
         </SectionBlock>
       )}
 
-      {/* 2. Problems block */}
-      {data.problems.length > 0 && (
+      {/* 2a. Highlights block (亮点优先正向反馈) */}
+      {highlights.length > 0 && (
+        <SectionBlock
+          tone="success"
+          icon={<CheckCircle2 className="w-3.5 h-3.5" />}
+          label={`继续保持的 ${highlights.length} 个亮点`}
+        >
+          <ProblemList problems={highlights} kind="highlight" />
+        </SectionBlock>
+      )}
+
+      {/* 2b. Issues block */}
+      {issues.length > 0 && (
         <SectionBlock
           tone="warn"
           icon={<AlertTriangle className="w-3.5 h-3.5" />}
-          label={`需要重点突破的 ${data.problems.length} 个问题`}
+          label={`需要重点突破的 ${issues.length} 个问题`}
         >
-          <ProblemList problems={data.problems} />
+          <ProblemList problems={issues} kind="issue" />
         </SectionBlock>
       )}
 
@@ -127,8 +140,24 @@ function SectionBlock({
   )
 }
 
-function ProblemList({ problems }: { problems: AiCommentProblem[] }) {
-  const [openIdx, setOpenIdx] = useState<number | null>(0)
+function ProblemList({
+  problems,
+  kind = "issue",
+}: {
+  problems: AiCommentProblem[]
+  kind?: "issue" | "highlight"
+}) {
+  const [openIdx, setOpenIdx] = useState<number | null>(problems[0]?.index ?? null)
+  const accent =
+    kind === "highlight"
+      ? {
+          openBorder: "border-[color:var(--success)]/45",
+          chip: "bg-[color:var(--success)]/15 text-[color:var(--success)]",
+        }
+      : {
+          openBorder: "border-[color:var(--warning)]/45",
+          chip: "bg-[color:var(--warning)]/15 text-[color:var(--warning)]",
+        }
   return (
     <div className="space-y-2">
       {problems.map((p) => {
@@ -141,7 +170,7 @@ function ProblemList({ problems }: { problems: AiCommentProblem[] }) {
             className={cn(
               "w-full text-left rounded-md border bg-background/60 hover:bg-background transition-colors",
               "px-3 py-2.5",
-              isOpen ? "border-[color:var(--warning)]/45" : "border-border",
+              isOpen ? accent.openBorder : "border-border",
             )}
             aria-expanded={isOpen}
           >
@@ -149,7 +178,7 @@ function ProblemList({ problems }: { problems: AiCommentProblem[] }) {
               <span
                 className={cn(
                   "shrink-0 w-5 h-5 rounded-full text-[10px] font-semibold flex items-center justify-center tabular-nums",
-                  "bg-[color:var(--warning)]/15 text-[color:var(--warning)]",
+                  accent.chip,
                 )}
               >
                 {p.index}

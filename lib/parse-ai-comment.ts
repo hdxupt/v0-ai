@@ -9,12 +9,57 @@
  */
 
 export interface AiCommentProblem {
-  /** 序号 1~4 */
+  /** 序号 1~6（中文序号或题号） */
   index: number
-  /** 一句话标题（从"第N，xxx。"中抽出 xxx） */
+  /** 一句话标题 */
   title: string
   /** 标题后的展开内容 */
   body: string
+  /** "issue" = 待改进，"highlight" = 亮点（默认 issue） */
+  kind: "issue" | "highlight"
+}
+
+const POSITIVE_WORDS = [
+  "做得非常棒",
+  "做得棒",
+  "做得好",
+  "非常好",
+  "完全正确",
+  "正确",
+  "掌握得很好",
+  "清晰",
+  "优秀",
+  "扎实",
+  "熟练",
+  "值得肯定",
+  "处理得很漂亮",
+  "推导得很到位",
+]
+const NEGATIVE_WORDS = [
+  "错误",
+  "混淆",
+  "遗漏",
+  "缺少",
+  "没有",
+  "不够",
+  "不严谨",
+  "暴露",
+  "跳跃",
+  "出错",
+  "划掉",
+  "丢分",
+  "未给出",
+  "导致",
+  "问题",
+  "盲点",
+  "薄弱",
+]
+
+function detectKind(text: string): "issue" | "highlight" {
+  // 任一负面词出现 → issue；没有负面词且有正面词 → highlight；否则 issue
+  for (const w of NEGATIVE_WORDS) if (text.includes(w)) return "issue"
+  for (const w of POSITIVE_WORDS) if (text.includes(w)) return "highlight"
+  return "issue"
 }
 
 export interface AiCommentStructured {
@@ -100,26 +145,43 @@ export function parseAiComment(raw: string | null | undefined): AiCommentStructu
           ? encMark
           : t.length
     const region = t.slice(firstMark, end)
-    // 两种切分模式：
-    //   cn:  第一，xxx。…  第二，yyy。…
-    //   num: 第1题 xxx。…  第2题 yyy。…
-    const re =
-      problemPattern === "cn"
-        ? /第([一二三四五六])[，,、：:]\s*([^。！]+[。！])\s*([\s\S]*?)(?=第[一二三四五六][，,、：:]|$)/g
-        : /第([1-9１-９])题[，,、：:]?\s*([^。！；;]+[。！；;])\s*([\s\S]*?)(?=第[1-9１-９]题[，,、：:]?|$)/g
-    let m: RegExpExecArray | null
-    let order = 1
-    while ((m = re.exec(region)) !== null) {
-      const idxRaw = m[1]
-      const idx =
-        CN_NUMS[idxRaw] ??
-        Number(idxRaw.replace(/[１-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))) ??
-        order
-      const title = m[2].replace(/[。！；;]\s*$/, "").trim()
-      const body = m[3].trim()
-      if (title) {
-        problems.push({ index: idx, title, body })
-        order += 1
+    if (problemPattern === "cn") {
+      // 第一，xxx。…  第二，yyy。…
+      const re = /第([一二三四五六])[，,、：:]\s*([^。！]+[。！])\s*([\s\S]*?)(?=第[一二三四五六][，,、：:]|$)/g
+      let m: RegExpExecArray | null
+      let order = 1
+      while ((m = re.exec(region)) !== null) {
+        const idxRaw = m[1]
+        const idx = CN_NUMS[idxRaw] ?? order
+        const title = m[2].replace(/[。！]\s*$/, "").trim()
+        const body = m[3].trim()
+        if (title) {
+          problems.push({ index: idx, title, body, kind: detectKind(body || title) })
+          order += 1
+        }
+      }
+    } else {
+      // num: 用"第N题"作为分段锚点，找所有出现位置后再切片
+      const anchors: Array<{ idx: number; pos: number }> = []
+      const aRe = /第([1-9１-９])题/g
+      let am: RegExpExecArray | null
+      while ((am = aRe.exec(region)) !== null) {
+        const raw = am[1]
+        const idx = CN_NUMS[raw] ?? Number(raw.replace(/[１-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0)))
+        anchors.push({ idx, pos: am.index })
+      }
+      for (let i = 0; i < anchors.length; i++) {
+        const segStart = anchors[i].pos
+        const segEnd = i + 1 < anchors.length ? anchors[i + 1].pos : region.length
+        const seg = region.slice(segStart, segEnd).trim()
+        // 标题：截到首个 。：:！；; 之前，作为概括句
+        const titleMatch = seg.match(/^第[1-9１-９]题[^。：:！；;]*[。：:！；;]?/)
+        let title = titleMatch ? titleMatch[0].replace(/[。：:！；;]\s*$/, "").trim() : `第${anchors[i].idx}题`
+        const body = titleMatch ? seg.slice(titleMatch[0].length).trim() : seg
+        // 题号已在 idx 里展示，标题去掉冗余前缀
+        title = title.replace(/^第[1-9１-９]题\s*/, "")
+        if (!title) title = `第${anchors[i].idx}题分析`
+        problems.push({ index: anchors[i].idx, title, body, kind: detectKind(`${title}。${body}`) })
       }
     }
   }

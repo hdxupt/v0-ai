@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
-import Link from "next/link"
 import { Mic, ArrowLeft, RefreshCcw } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -14,12 +13,25 @@ import { createClient } from "@/lib/supabase/client"
 import { listTasksForStudent, listSubmissionsByStudent } from "@/lib/db"
 import type { Task, Submission } from "@/lib/types"
 
-export function StudentShell() {
-  const { user } = useAuth()
-  const [tasks, setTasks] = useState<Task[]>([])
-  const [submissions, setSubmissions] = useState<Submission[]>([])
-  const [selectedSubmissionId, setSelectedSubmissionId] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
+interface StudentShellProps {
+  initialTasks?: Task[]
+  initialSubmissions?: Submission[]
+}
+
+export function StudentShell({
+  initialTasks = [],
+  initialSubmissions = [],
+}: StudentShellProps) {
+  const { user, logout } = useAuth()
+  const [tasks, setTasks] = useState<Task[]>(initialTasks)
+  const [submissions, setSubmissions] = useState<Submission[]>(initialSubmissions)
+  const [selectedSubmissionId, setSelectedSubmissionId] = useState<string | null>(() => {
+    const latestGraded = initialSubmissions.find((x) => x.status === "graded")
+    return latestGraded?.id ?? null
+  })
+  // First paint already has SSR data — start with loading=false to avoid
+  // the brief "加载中..." flash that we used to show.
+  const [loading, setLoading] = useState(false)
 
   const load = useCallback(async () => {
     if (!user) return
@@ -79,13 +91,14 @@ export function StudentShell() {
     <div className="min-h-screen bg-muted/40 py-6 px-4 sm:px-6">
       {/* Demo context badge */}
       <div className="max-w-[1280px] mx-auto mb-4 flex items-center justify-between text-xs">
-        <Link
-          href="/login"
+        <button
+          type="button"
+          onClick={logout}
           className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           切换账号
-        </Link>
+        </button>
         <span className="inline-flex items-center gap-1.5 text-muted-foreground">
           <span className="w-1.5 h-1.5 rounded-full bg-[color:var(--success)]" />
           学生端 · 实时同步

@@ -1,7 +1,6 @@
 "use client"
 
 import { ChevronDown, LogOut, RefreshCw, User, Monitor, Moon, Sun, Palette, Check } from "lucide-react"
-import Link from "next/link"
 import { useTheme } from "next-themes"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
@@ -82,11 +81,9 @@ export function UserMenu() {
             </DropdownMenuItem>
           </DropdownMenuSubContent>
         </DropdownMenuSub>
-        <DropdownMenuItem asChild>
-          <Link href="/login">
-            <RefreshCw className="w-3.5 h-3.5" />
-            切换账号
-          </Link>
+        <DropdownMenuItem onClick={logout}>
+          <RefreshCw className="w-3.5 h-3.5" />
+          切换账号
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem className="text-destructive" onClick={logout}>

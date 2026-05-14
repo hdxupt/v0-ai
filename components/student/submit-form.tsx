@@ -109,9 +109,11 @@ export function SubmitForm({ task, student, existingSubmission }: SubmitFormProp
       if (!res.ok) throw new Error("upload failed")
       const data = await res.json()
       setFiles((prev) => prev.map((f) => (f.id === item.id ? { ...f, status: "done", progress: 100, pathname: data.pathname } : f)))
+      toast.success(`图片上传成功（${item.file.name}）`, { duration: 1500 })
       return data.pathname
     } catch (e) {
       setFiles((prev) => prev.map((f) => (f.id === item.id ? { ...f, status: "error", progress: 0 } : f)))
+      toast.error(`图片上传失败：${item.file.name}`)
       return null
     }
   }
@@ -153,8 +155,13 @@ export function SubmitForm({ task, student, existingSubmission }: SubmitFormProp
       })
       if (!res.ok) throw new Error(await res.text())
       const data = await res.json()
-      toast.success("作业已提交至老师")
-      router.push(`/student/submitted/${data.submissionId}`)
+      toast.success("作业已提交至老师", {
+        description: "正在前往提交结果页…",
+        duration: 2000,
+      })
+      // Hard reload to flush RSC cache so the student inbox shows the new submission
+      // when the user navigates back to /student.
+      window.location.href = `/student/submitted/${data.submissionId}`
     } catch (e) {
       toast.error("提交失败，请重试")
       setSubmitting(false)

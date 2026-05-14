@@ -1,7 +1,6 @@
 "use client"
 
 import { createContext, useContext, useEffect, useState, useCallback } from "react"
-import { useRouter } from "next/navigation"
 import { AUTH_COOKIE_NAME, AUTH_STORAGE_KEY, serializeUser } from "@/lib/auth"
 import type { AppUser } from "@/lib/types"
 
@@ -23,7 +22,6 @@ export function AuthProvider({
 }) {
   const [user, setUser] = useState<AppUser | null>(initialUser)
   const [loading, setLoading] = useState(false)
-  const router = useRouter()
 
   // Sync between tabs: respond to storage events
   useEffect(() => {
@@ -60,10 +58,14 @@ export function AuthProvider({
     setUser(null)
     if (typeof window !== "undefined") {
       localStorage.removeItem(AUTH_STORAGE_KEY)
+      // Clear cookie with both default path and explicit settings to be safe
       document.cookie = `${AUTH_COOKIE_NAME}=; path=/; max-age=0; SameSite=Lax`
+      document.cookie = `${AUTH_COOKIE_NAME}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`
+      // Full reload guarantees middleware re-evaluates, RSC cache flushed
+      // and any leftover Supabase Realtime channels are torn down.
+      window.location.href = "/login"
     }
-    router.push("/login")
-  }, [router])
+  }, [])
 
   return (
     <AuthContext.Provider value={{ user, loading, login, logout }}>

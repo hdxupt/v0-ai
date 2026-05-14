@@ -6,35 +6,69 @@ import {
   ZoomOut,
   RotateCw,
   Maximize2,
-  AlertTriangle,
   AlertCircle,
+  AlertTriangle,
+  Sparkles,
+  CircleSlash,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
-import type { AIIssueAnnotation } from "@/lib/types"
+import type { ViewerBox } from "@/lib/types"
 import { formatDateTime } from "@/lib/format"
 
-const issueStyle = {
+/**
+ * 按 bbox type 选样式。
+ * 兼容 v1（error / warning）与 v2（error / partial / highlight / missing）。
+ */
+const TYPE_STYLE = {
   error: {
     border: "border-destructive",
     bg: "bg-destructive/10",
     text: "text-destructive",
-    pill: "bg-destructive",
+    pill: "bg-destructive text-destructive-foreground",
+    label: "错误",
+    Icon: AlertCircle,
   },
   warning: {
-    border: "border-[color:var(--warning)]",
-    bg: "bg-[color:var(--warning)]/10",
-    text: "text-[color:var(--warning)]",
-    pill: "bg-[color:var(--warning)]",
+    border: "border-[color:var(--warning,#f59e0b)]",
+    bg: "bg-[color:var(--warning,#f59e0b)]/15",
+    text: "text-[color:var(--warning,#f59e0b)]",
+    pill: "bg-[color:var(--warning,#f59e0b)] text-white",
+    label: "注意",
+    Icon: AlertTriangle,
+  },
+  partial: {
+    border: "border-[color:var(--warning,#f59e0b)]",
+    bg: "bg-[color:var(--warning,#f59e0b)]/15",
+    text: "text-[color:var(--warning,#f59e0b)]",
+    pill: "bg-[color:var(--warning,#f59e0b)] text-white",
+    label: "半对",
+    Icon: AlertTriangle,
+  },
+  highlight: {
+    border: "border-emerald-500",
+    bg: "bg-emerald-500/10",
+    text: "text-emerald-600 dark:text-emerald-400",
+    pill: "bg-emerald-500 text-white",
+    label: "亮点",
+    Icon: Sparkles,
+  },
+  missing: {
+    border: "border-muted-foreground/60",
+    bg: "bg-muted/40",
+    text: "text-muted-foreground",
+    pill: "bg-muted-foreground text-background",
+    label: "漏做",
+    Icon: CircleSlash,
   },
 } as const
 
 interface Props {
   imageUrls: string[]
-  issues: AIIssueAnnotation[]
+  boxes: ViewerBox[]
   showAnnotations: boolean
   currentIndex: number
   onIndexChange: (idx: number) => void
@@ -44,7 +78,7 @@ interface Props {
 
 export function GradingImageViewer({
   imageUrls,
-  issues,
+  boxes,
   showAnnotations,
   currentIndex,
   onIndexChange,
@@ -56,8 +90,9 @@ export function GradingImageViewer({
 
   const url = imageUrls[currentIndex]
   const total = imageUrls.length
-  // Show annotations only on the first image (mock pretends AI analyzed page 1)
-  const visibleIssues = currentIndex === 0 && showAnnotations ? issues : []
+  // For now annotations are shown only on the first page (model returns 100x100 coords for the first image).
+  // 多图时仍可叠加在第一页，避免错位。
+  const visibleBoxes = currentIndex === 0 && showAnnotations ? boxes : []
 
   return (
     <div className="flex flex-col h-full bg-muted/40 border-r border-border">
@@ -159,18 +194,18 @@ export function GradingImageViewer({
               </div>
             )}
 
-            {visibleIssues.map((issue, idx) => {
-              const style = issueStyle[issue.type]
-              const Icon = issue.type === "error" ? AlertCircle : AlertTriangle
+            {visibleBoxes.map((box, idx) => {
+              const style = TYPE_STYLE[box.type] ?? TYPE_STYLE.error
+              const Icon = style.Icon
               return (
                 <div
-                  key={issue.id}
+                  key={box.id}
                   className="absolute group"
                   style={{
-                    left: `${issue.x}%`,
-                    top: `${issue.y}%`,
-                    width: `${issue.w}%`,
-                    height: `${issue.h}%`,
+                    left: `${box.x}%`,
+                    top: `${box.y}%`,
+                    width: `${box.w}%`,
+                    height: `${box.h}%`,
                   }}
                 >
                   <div
@@ -182,24 +217,39 @@ export function GradingImageViewer({
                   />
                   <div
                     className={cn(
-                      "absolute -top-2 -left-2 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-semibold text-white shadow-md",
+                      "absolute -top-2 -left-2 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-semibold shadow-md",
                       style.pill,
                     )}
                   >
-                    {idx + 1}
+                    {box.index ?? idx + 1}
                   </div>
                   <div
                     className={cn(
-                      "absolute left-full ml-2 top-1/2 -translate-y-1/2 z-10 min-w-[160px] max-w-[240px] p-2 rounded-md shadow-md border bg-card",
+                      "absolute left-full ml-2 top-1/2 -translate-y-1/2 z-10 min-w-[180px] max-w-[280px] p-2 rounded-md shadow-md border bg-card",
                       "opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none",
                       style.border,
                     )}
                   >
-                    <div className={cn("flex items-center gap-1.5 text-[11px] font-medium mb-0.5", style.text)}>
+                    <div className={cn("flex items-center gap-1.5 text-[11px] font-medium mb-1", style.text)}>
                       <Icon className="w-3 h-3" />
-                      {issue.type === "error" ? "错误" : "注意"}
+                      {style.label}
+                      {typeof box.confidence === "number" ? (
+                        <span className="ml-auto text-muted-foreground/70 font-normal">
+                          conf {Math.round(box.confidence * 100)}%
+                        </span>
+                      ) : null}
                     </div>
-                    <p className="text-xs text-foreground leading-relaxed">{issue.message}</p>
+                    {box.question_text ? (
+                      <p className="text-[11px] text-muted-foreground italic mb-1 line-clamp-2">
+                        {box.question_text}
+                      </p>
+                    ) : null}
+                    <p className="text-xs text-foreground leading-relaxed">{box.message}</p>
+                    {box.correct_answer ? (
+                      <p className="mt-1 text-[11px] text-emerald-700 dark:text-emerald-300">
+                        正确做法：{box.correct_answer}
+                      </p>
+                    ) : null}
                   </div>
                 </div>
               )
@@ -209,16 +259,26 @@ export function GradingImageViewer({
       </div>
 
       <div className="flex items-center justify-between px-4 py-2 border-t border-border bg-card text-xs text-muted-foreground">
-        <span>悬停在标记上查看 AI 批改细节{currentIndex !== 0 && total > 1 ? "（标记仅显示在第 1 页）" : ""}</span>
-        <div className="flex items-center gap-3">
-          <span className="inline-flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-destructive" /> 错误
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-[color:var(--warning)]" /> 注意
-          </span>
+        <span>
+          悬停在标记上查看 AI 批改细节
+          {currentIndex !== 0 && total > 1 ? "（标记仅显示在第 1 页）" : ""}
+        </span>
+        <div className="flex items-center gap-3 flex-wrap">
+          <Legend dot="bg-destructive" label="错误" />
+          <Legend dot="bg-[color:var(--warning,#f59e0b)]" label="半对/注意" />
+          <Legend dot="bg-emerald-500" label="亮点" />
+          <Legend dot="bg-muted-foreground" label="漏做" />
         </div>
       </div>
     </div>
+  )
+}
+
+function Legend({ dot, label }: { dot: string; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span className={cn("w-2 h-2 rounded-full", dot)} />
+      {label}
+    </span>
   )
 }

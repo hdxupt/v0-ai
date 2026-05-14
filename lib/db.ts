@@ -223,7 +223,7 @@ export async function updateSubmissionGrading(
     score: number
     ai_comment: string
     teacher_comment: string
-    ai_issues: any[]
+    ai_issues: any
     weak_points: any[]
     student_id: string
     student_name: string

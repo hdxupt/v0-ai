@@ -8,19 +8,36 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { studentSubmissions } from "@/lib/mock-data"
+import { studentSubmissions as fallback } from "@/lib/mock-data"
 import { cn } from "@/lib/utils"
 
 function scoreColor(score: number) {
-  if (score >= 90) return "text-[color:var(--success)]"
+  if (score >= 90) return "text-[color:var(--success,#22c55e)]"
   if (score >= 75) return "text-primary"
-  if (score >= 60) return "text-[color:var(--warning)]"
+  if (score >= 60) return "text-[color:var(--warning,#f59e0b)]"
   return "text-destructive"
 }
 
-export function StudentStatusPanel() {
-  const submitted = studentSubmissions.filter((s) => s.submitted)
-  const notSubmitted = studentSubmissions.filter((s) => !s.submitted)
+export interface PanelStudent {
+  id: string
+  name: string
+  studentNo: string
+  submitted: boolean
+  score: number | null
+  submittedAt: string
+  rank?: number
+  /** submission row id, used for grading deep link */
+  submissionId?: string
+}
+
+interface Props {
+  students?: PanelStudent[]
+}
+
+export function StudentStatusPanel({ students }: Props = {}) {
+  const list: PanelStudent[] = students && students.length > 0 ? students : (fallback as any)
+  const submitted = list.filter((s) => s.submitted)
+  const notSubmitted = list.filter((s) => !s.submitted)
 
   return (
     <Card className="gap-0">
@@ -28,7 +45,7 @@ export function StudentStatusPanel() {
         <div className="flex items-center justify-between">
           <CardTitle className="text-base">学生提交状态</CardTitle>
           <Badge variant="secondary" className="font-normal">
-            {submitted.length}/{studentSubmissions.length}
+            {submitted.length}/{list.length}
           </Badge>
         </div>
       </CardHeader>
@@ -57,7 +74,7 @@ export function StudentStatusPanel() {
                 {submitted.map((s) => (
                   <li key={s.id}>
                     <Link
-                      href={`/dashboard/grading/${s.id}`}
+                      href={`/dashboard/grading/${s.submissionId ?? s.id}`}
                       className="flex items-center gap-3 px-2 py-2 rounded-md hover:bg-muted transition-colors group"
                     >
                       <Avatar className="w-8 h-8">
@@ -68,16 +85,16 @@ export function StudentStatusPanel() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
                           <span className="text-sm font-medium truncate">{s.name}</span>
-                          {s.rank && s.rank <= 3 && (
+                          {s.rank && s.rank <= 3 ? (
                             <Trophy
                               className={cn(
                                 "w-3 h-3",
-                                s.rank === 1 && "text-[color:var(--warning)]",
+                                s.rank === 1 && "text-[color:var(--warning,#f59e0b)]",
                                 s.rank === 2 && "text-muted-foreground",
-                                s.rank === 3 && "text-[color:var(--warning)]/70",
+                                s.rank === 3 && "text-[color:var(--warning,#f59e0b)]/70",
                               )}
                             />
-                          )}
+                          ) : null}
                         </div>
                         <div className="text-[11px] text-muted-foreground">
                           {s.studentNo} · 提交于 {s.submittedAt}
@@ -85,7 +102,7 @@ export function StudentStatusPanel() {
                       </div>
                       <div className="flex items-center gap-1">
                         <span className={cn("text-base font-semibold tabular-nums", scoreColor(s.score ?? 0))}>
-                          {s.score}
+                          {s.score ?? "—"}
                         </span>
                         <ChevronRight className="w-3.5 h-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
                       </div>

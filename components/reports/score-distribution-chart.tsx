@@ -8,7 +8,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart"
-import { scoreDistribution } from "@/lib/mock-data"
+import { scoreDistribution as fallbackData } from "@/lib/mock-data"
 
 const config: ChartConfig = {
   count: {
@@ -17,7 +17,17 @@ const config: ChartConfig = {
   },
 }
 
-export function ScoreDistributionChart() {
+export interface DistRow {
+  range: string
+  count: number
+}
+
+interface Props {
+  data?: DistRow[]
+}
+
+export function ScoreDistributionChart({ data }: Props = {}) {
+  const rows = data && data.length > 0 ? data : fallbackData
   return (
     <Card>
       <CardHeader>
@@ -26,7 +36,7 @@ export function ScoreDistributionChart() {
       </CardHeader>
       <CardContent>
         <ChartContainer config={config} className="h-[260px] w-full">
-          <BarChart data={scoreDistribution} margin={{ top: 16, right: 12, left: -12, bottom: 0 }}>
+          <BarChart data={rows} margin={{ top: 16, right: 12, left: -12, bottom: 0 }}>
             <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="var(--border)" />
             <XAxis
               dataKey="range"

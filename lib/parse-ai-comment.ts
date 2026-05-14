@@ -138,12 +138,19 @@ export function parseAiComment(raw: string | null | undefined): AiCommentStructu
   // ---------- 3. problems ----------
   const problems: AiCommentProblem[] = []
   if (firstMark >= 0) {
-    const end =
-      actionMark > firstMark
-        ? actionMark
-        : encMark > firstMark
-          ? encMark
-          : t.length
+    // num 模式下，问题描述里常包含嵌入式"建议..."短句，不能用 actionMark 切，
+    // 必须等到 encMark 才结束；最后用"剥离尾段 action"的方式处理。
+    let end: number
+    if (problemPattern === "num") {
+      end = encMark > firstMark ? encMark : t.length
+    } else {
+      end =
+        actionMark > firstMark
+          ? actionMark
+          : encMark > firstMark
+            ? encMark
+            : t.length
+    }
     const region = t.slice(firstMark, end)
     if (problemPattern === "cn") {
       // 第一，xxx。…  第二，yyy。…

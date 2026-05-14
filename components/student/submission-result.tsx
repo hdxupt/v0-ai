@@ -9,6 +9,8 @@ import { cn } from "@/lib/utils"
 import { formatRelativeTime } from "@/lib/format"
 import { toViewerBoxes, normalizeWeakPoints, type Submission, type Task, type ViewerBox } from "@/lib/types"
 import { toFileSrc } from "@/lib/blob-url"
+import { AiCommentStructured } from "@/components/student/ai-comment-structured"
+import { AnnotationDetailList } from "@/components/student/annotation-detail-list"
 
 export function SubmissionResult({ submission, task }: { submission: Submission; task: Task }) {
   const isGraded = submission.status === "graded"
@@ -91,6 +93,8 @@ function GradedView({ submission, task }: { submission: Submission; task: Task }
   const excellent = scorePercent >= 85
   const viewerBoxes = toViewerBoxes(submission.ai_issues)
   const weakPoints = normalizeWeakPoints(submission.weak_points)
+  /** 与图片 bbox 共享的高亮状态：null 表示无悬停 */
+  const [activeBoxId, setActiveBoxId] = useState<string | null>(null)
 
   return (
     <>
@@ -157,18 +161,8 @@ function GradedView({ submission, task }: { submission: Submission; task: Task }
         </Card>
       )}
 
-      {/* AI comment */}
-      {submission.ai_comment && (
-        <Card className="p-5 bg-accent/30 border-accent">
-          <div className="flex items-center gap-2 mb-2">
-            <Sparkles className="w-4 h-4 text-primary" />
-            <h3 className="text-sm font-medium">AI 学情分析</h3>
-          </div>
-          <p className="text-sm leading-relaxed text-foreground/90 whitespace-pre-wrap">
-            {submission.ai_comment}
-          </p>
-        </Card>
-      )}
+      {/* AI comment - 结构化分块 */}
+      {submission.ai_comment && <AiCommentStructured comment={submission.ai_comment} />}
 
       {/* Weak points */}
       {weakPoints.length > 0 && (
@@ -187,18 +181,33 @@ function GradedView({ submission, task }: { submission: Submission; task: Task }
         </Card>
       )}
 
-      {/* Answer images */}
-      <Card className="p-5">
-        <div className="flex items-center justify-between mb-3">
+      {/* Answer images + linked annotation list */}
+      <Card className="p-5 space-y-4">
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-[color:var(--success)]" />
-            <h3 className="text-sm font-medium">我的答卷</h3>
+            <h3 className="text-sm font-medium">我的答卷 + AI 批注</h3>
           </div>
           <span className="text-xs text-muted-foreground">
-            共 {submission.image_urls.length} 张
+            共 {submission.image_urls.length} 张 · {viewerBoxes.length} 处批注
           </span>
         </div>
-        <ImageGallery pathnames={submission.image_urls} annotations={viewerBoxes} />
+        <ImageGallery
+          pathnames={submission.image_urls}
+          annotations={viewerBoxes}
+          activeBoxId={activeBoxId}
+          onHoverBox={setActiveBoxId}
+        />
+        {viewerBoxes.length > 0 && (
+          <>
+            <div className="border-t border-border" />
+            <AnnotationDetailList
+              boxes={viewerBoxes}
+              activeId={activeBoxId}
+              onHoverChange={setActiveBoxId}
+            />
+          </>
+        )}
       </Card>
     </>
   )
@@ -207,9 +216,13 @@ function GradedView({ submission, task }: { submission: Submission; task: Task }
 function ImageGallery({
   pathnames,
   annotations,
+  activeBoxId,
+  onHoverBox,
 }: {
   pathnames: string[]
   annotations?: ViewerBox[]
+  activeBoxId?: string | null
+  onHoverBox?: (id: string | null) => void
 }) {
   const [activeIdx, setActiveIdx] = useState(0)
   if (pathnames.length === 0) {
@@ -227,12 +240,19 @@ function ImageGallery({
         {/* Render AI issue boxes only on first image for simplicity */}
         {activeIdx === 0 &&
           annotations?.map((box, idx) => {
-            const color =
+            const isActive = activeBoxId === box.id
+            const baseColor =
               box.type === "error" || box.type === "missing"
                 ? "border-destructive bg-destructive/15"
                 : box.type === "highlight"
                   ? "border-emerald-500 bg-emerald-500/15"
                   : "border-[color:var(--warning)] bg-[color:var(--warning)]/15"
+            const activeColor =
+              box.type === "error" || box.type === "missing"
+                ? "border-destructive bg-destructive/30 shadow-lg shadow-destructive/40"
+                : box.type === "highlight"
+                  ? "border-emerald-500 bg-emerald-500/30 shadow-lg shadow-emerald-500/40"
+                  : "border-[color:var(--warning)] bg-[color:var(--warning)]/30 shadow-lg shadow-[color:var(--warning)]/40"
             const dot =
               box.type === "error" || box.type === "missing"
                 ? "bg-destructive"
@@ -242,7 +262,12 @@ function ImageGallery({
             return (
               <div
                 key={box.id}
-                className={cn("absolute border-2 rounded-sm pointer-events-none", color)}
+                onMouseEnter={() => onHoverBox?.(box.id)}
+                onMouseLeave={() => onHoverBox?.(null)}
+                className={cn(
+                  "absolute rounded-sm cursor-pointer transition-all duration-200",
+                  isActive ? `border-[3px] ${activeColor} scale-[1.02] z-10` : `border-2 ${baseColor}`,
+                )}
                 style={{
                   left: `${box.x}%`,
                   top: `${box.y}%`,
@@ -252,8 +277,9 @@ function ImageGallery({
               >
                 <span
                   className={cn(
-                    "absolute -top-1.5 -left-1.5 w-4 h-4 rounded-full text-[9px] font-semibold text-white flex items-center justify-center shadow",
+                    "absolute -top-1.5 -left-1.5 rounded-full text-[9px] font-semibold text-white flex items-center justify-center shadow transition-all",
                     dot,
+                    isActive ? "w-5 h-5 text-[10px] ring-2 ring-background" : "w-4 h-4",
                   )}
                 >
                   {idx + 1}

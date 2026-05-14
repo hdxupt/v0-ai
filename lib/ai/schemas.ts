@@ -52,7 +52,18 @@ export type GradingSummary = z.infer<typeof GradingSummarySchema>
 export const GradingResultSchema = z.object({
   summary: GradingSummarySchema,
   correction_details: z.array(CorrectionDetailSchema).max(40),
-  teacher_comment: z.string().min(20).max(1200).describe("整体三段式评语，单一字符串，不含换行"),
+  teacher_comment: z
+    .string()
+    .min(20)
+    .max(1200)
+    .describe(
+      "整体学情评语，单一字符串、不含换行。必须严格按四段式结构串联：" +
+        "(1) 开头用 [姓名]同学，… 一句温暖肯定； " +
+        "(2) 用'但目前存在 N 个核心问题需要重点突破：'起头，然后用'第一，xxx。…'、'第二，xxx。…'、'第三，xxx。…'分别列出 2~3 条核心问题（每条先一句短标题再展开）； " +
+        "(3) 用'建议接下来这样做：'起头给出 1~3 条可执行行动； " +
+        "(4) 用'相信下次作业一定会有明显进步！'之类的一句鼓励收尾。" +
+        "禁止省略'第一/第二/第三'这类序号词，禁止用'第1题/第2题'代替（题号请放进具体描述里）。",
+    ),
   radar_analysis: RadarAnalysisSchema,
 })
 export type GradingResult = z.infer<typeof GradingResultSchema>

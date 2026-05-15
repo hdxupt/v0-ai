@@ -7,14 +7,19 @@
  */
 export const AI_MODELS = {
   /**
-   * 单卷批改：使用 opus 4.6（Anthropic 当前视觉最强模型）。
-   * 之前用 sonnet 4.5 在手写中文卷面上 bbox 定位偏差大（语义对、像素差），
-   * 升级到 opus 后视觉空间感显著改善，单卷成本约 5×，demo / 真实使用都值得。
-   * 注：Anthropic 当前最新就是 opus 4.6 / sonnet 4.5，不存在 opus 4.7。
+   * 单卷批改模型。
+   *
+   * 视觉最强是 opus 4.6，但 Vercel AI Gateway 当前对 free credits 限制了 opus 系列，
+   * 调用会返回 403 RestrictedModelsError。一旦团队充值了 paid credits
+   * (vercel.com/[team]/~/ai)，把下面这行改成
+   *   "anthropic/claude-opus-4.6"
+   * 即可获得更精准的 bbox 视觉定位。
+   *
+   * 当前回退到 sonnet 4.5：free credits 可用，bbox 像素精度受限但语义批改一致。
    */
-  grading: "anthropic/claude-opus-4.6",
-  /** 班级学情报告：同样用 opus，调用次数少可承受 */
-  classReport: "anthropic/claude-opus-4.6",
+  grading: "anthropic/claude-sonnet-4.5",
+  /** 班级学情报告：暂同 grading；有 paid credits 后可单独升 opus */
+  classReport: "anthropic/claude-sonnet-4.5",
   /** 教师 AI 助教：轻量问答，gpt-5-mini 即可 */
   chat: "openai/gpt-5-mini",
 } as const

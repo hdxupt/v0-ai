@@ -1,8 +1,9 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { Eye, Sparkles, Calendar, Send, Clock } from "lucide-react"
+import { Eye, Sparkles, Calendar, Send, Clock, MoreVertical, Trash2, Loader2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardAction } from "@/components/ui/card"
@@ -16,10 +17,27 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { cn } from "@/lib/utils"
 import { formatDateTime, formatDueDate } from "@/lib/format"
 import type { Task, Submission } from "@/lib/types"
 import { ReminderDialog } from "./reminder-dialog"
+import { TrashDialog } from "./trash-dialog"
 
 export interface TaskRowData {
   task: Task
@@ -64,8 +82,32 @@ function statusBadge(row: TaskRowData) {
 }
 
 export function TaskTable({ rows, teacherName, teacherId }: TaskTableProps) {
+  const router = useRouter()
   const [filter, setFilter] = useState<FilterKey>("all")
   const [reminderTask, setReminderTask] = useState<Task | null>(null)
+  // 待删除任务：null = 关闭弹窗；非空 = 显示二次确认
+  const [pendingDelete, setPendingDelete] = useState<Task | null>(null)
+  const [deleting, setDeleting] = useState(false)
+
+  async function handleConfirmDelete() {
+    if (!pendingDelete) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/tasks/${pendingDelete.id}`, { method: "DELETE" })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body?.error ?? "删除失败")
+      }
+      setPendingDelete(null)
+      // 刷新当前页 — 父组件是 RSC，re-fetch 拉到最新列表
+      router.refresh()
+    } catch (err: any) {
+      console.error("[v0] delete task failed:", err)
+      alert(err?.message ?? "删除失败")
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   const filtered = rows.filter((r) => {
     if (filter === "all") return true
@@ -85,14 +127,17 @@ export function TaskTable({ rows, teacherName, teacherId }: TaskTableProps) {
           <CardDescription>跟踪每份作业的提交进度，一键催交未交学生</CardDescription>
         </div>
         <CardAction>
-          <Tabs value={filter} onValueChange={(v) => setFilter(v as FilterKey)}>
-            <TabsList>
-              <TabsTrigger value="all">全部 <span className="ml-1 text-[10px] opacity-60">{rows.length}</span></TabsTrigger>
-              <TabsTrigger value="pending">未完成</TabsTrigger>
-              <TabsTrigger value="completed">已完成</TabsTrigger>
-            </TabsList>
-            <TabsContent value={filter} />
-          </Tabs>
+          <div className="flex items-center gap-2">
+            <Tabs value={filter} onValueChange={(v) => setFilter(v as FilterKey)}>
+              <TabsList>
+                <TabsTrigger value="all">全部 <span className="ml-1 text-[10px] opacity-60">{rows.length}</span></TabsTrigger>
+                <TabsTrigger value="pending">未完成</TabsTrigger>
+                <TabsTrigger value="completed">已完成</TabsTrigger>
+              </TabsList>
+              <TabsContent value={filter} />
+            </Tabs>
+            <TrashDialog />
+          </div>
         </CardAction>
       </CardHeader>
       <CardContent className="p-0">
@@ -186,6 +231,30 @@ export function TaskTable({ rows, teacherName, teacherId }: TaskTableProps) {
                             查看进度
                           </Link>
                         </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              aria-label="更多操作"
+                            >
+                              <MoreVertical className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              variant="destructive"
+                              onSelect={(e) => {
+                                e.preventDefault()
+                                setPendingDelete(task)
+                              }}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              删除作业
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -207,6 +276,65 @@ export function TaskTable({ rows, teacherName, teacherId }: TaskTableProps) {
           onClose={() => setReminderTask(null)}
         />
       ) : null}
+
+      <AlertDialog
+        open={!!pendingDelete}
+        onOpenChange={(open) => {
+          if (!open && !deleting) setPendingDelete(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认删除作业？</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingDelete ? (
+                <>
+                  即将删除 <span className="font-medium text-foreground">「{pendingDelete.title}」</span>。
+                  老师和学生两端的列表都会隐藏，相关
+                  {(() => {
+                    const subs =
+                      rows.find((r) => r.task.id === pendingDelete.id)?.submissions.length ?? 0
+                    return subs > 0 ? (
+                      <>
+                        {" "}
+                        <span className="font-medium text-foreground">{subs} 份提交记录</span>{" "}
+                        会一起隐藏（但底层数据保留）。
+                      </>
+                    ) : (
+                      "提交记录会一起隐藏（但底层数据保留）。"
+                    )
+                  })()}
+                  误删后可以在「回收站」一键恢复。
+                </>
+              ) : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                // 阻止 Radix 默认关闭，让我们手动控制 loading 期间
+                e.preventDefault()
+                handleConfirmDelete()
+              }}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  删除中
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-3.5 h-3.5" />
+                  确认删除
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   )
 }

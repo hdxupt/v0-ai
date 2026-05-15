@@ -35,6 +35,8 @@ export interface Task {
   status: TaskStatus
   target_student_count: number
   created_at: string
+  /** 软删除时间戳。null 或缺失 = 活跃；非空 = 回收站内。 */
+  deleted_at?: string | null
 }
 
 export type SubmissionStatus = "submitted" | "grading" | "graded"

@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth-server"
-import { getTask, createSubmission } from "@/lib/db"
+import { getActiveTask, createSubmission } from "@/lib/db"
 
 export async function POST(request: NextRequest) {
   const user = await getCurrentUser()
@@ -17,8 +17,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Student missing class" }, { status: 400 })
     }
 
-    const task = await getTask(taskId)
-    if (!task) return NextResponse.json({ error: "Task not found" }, { status: 404 })
+    const task = await getActiveTask(taskId)
+    if (!task) {
+      // 任务不存在或已被老师删除
+      return NextResponse.json({ error: "作业不存在或已被老师删除" }, { status: 404 })
+    }
     if (!task.teacher_id) return NextResponse.json({ error: "Task missing teacher" }, { status: 400 })
 
     const submission = await createSubmission({

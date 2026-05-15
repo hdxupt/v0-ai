@@ -47,12 +47,29 @@ export async function getUser(id: string): Promise<AppUser | null> {
 }
 
 /* ---------- Tasks ---------- */
+// 软删除策略：所有"活跃任务"查询统一过滤 deleted_at IS NULL；
+// "回收站"查询用 listDeletedTasksByTeacher。
+// 注：Supabase / PostgREST 用 .is("deleted_at", null) 表示 IS NULL。
+
 export async function listTasksByTeacher(teacherId: string): Promise<Task[]> {
   const { data, error } = await supabase()
     .from("tasks")
     .select("*")
     .eq("teacher_id", teacherId)
+    .is("deleted_at", null)
     .order("created_at", { ascending: false })
+  if (error) throw error
+  return (data ?? []) as Task[]
+}
+
+/** 老师"回收站" — 已软删除的任务，按删除时间倒序。 */
+export async function listDeletedTasksByTeacher(teacherId: string): Promise<Task[]> {
+  const { data, error } = await supabase()
+    .from("tasks")
+    .select("*")
+    .eq("teacher_id", teacherId)
+    .not("deleted_at", "is", null)
+    .order("deleted_at", { ascending: false })
   if (error) throw error
   return (data ?? []) as Task[]
 }
@@ -66,14 +83,63 @@ export async function listTasksForStudent(studentId: string): Promise<Task[]> {
     .select("*")
     .contains("class_ids", [user.class_id])
     .eq("status", "active")
+    .is("deleted_at", null)
     .order("created_at", { ascending: false })
   if (error) throw error
   return (data ?? []) as Task[]
 }
 
 export async function getTask(id: string): Promise<Task | null> {
+  // 注意：这里不过滤 deleted_at —— 老师"恢复"或查看回收站详情时需要拿到删除过的记录。
+  // 学生端 / 提交校验 路径应改用 getActiveTask。
   const { data } = await supabase().from("tasks").select("*").eq("id", id).single()
   return (data ?? null) as Task | null
+}
+
+/** 获取一份"未被软删除"的任务。学生端、新建提交校验必须用这个，确保看不到已删任务。 */
+export async function getActiveTask(id: string): Promise<Task | null> {
+  const { data } = await supabase()
+    .from("tasks")
+    .select("*")
+    .eq("id", id)
+    .is("deleted_at", null)
+    .maybeSingle()
+  return (data ?? null) as Task | null
+}
+
+/**
+ * 软删除一份作业任务。
+ * - 仅标记 deleted_at，不真正删除 submissions / activities / notifications
+ * - 学生端、老师端列表均会自动隐藏
+ * - 可通过 restoreTask 一键恢复
+ */
+export async function softDeleteTask(taskId: string, teacherId: string): Promise<Task> {
+  const { data, error } = await supabase()
+    .from("tasks")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", taskId)
+    .eq("teacher_id", teacherId) // 防越权：只能删自己的任务
+    .is("deleted_at", null) // 已删除的不再重复操作
+    .select()
+    .single()
+  if (error) throw error
+  if (!data) throw new Error("任务不存在或无权限删除")
+  return data as Task
+}
+
+/** 恢复一份已删除的任务（把 deleted_at 置 null）。 */
+export async function restoreTask(taskId: string, teacherId: string): Promise<Task> {
+  const { data, error } = await supabase()
+    .from("tasks")
+    .update({ deleted_at: null })
+    .eq("id", taskId)
+    .eq("teacher_id", teacherId)
+    .not("deleted_at", "is", null)
+    .select()
+    .single()
+  if (error) throw error
+  if (!data) throw new Error("任务不存在或未处于已删除状态")
+  return data as Task
 }
 
 export async function createTask(
@@ -141,13 +207,17 @@ export async function listSubmissionsByTask(taskId: string): Promise<Submission[
 }
 
 export async function listSubmissionsByStudent(studentId: string): Promise<Submission[]> {
+  // 通过内联 join (task!inner) 过滤掉关联任务已被软删除的提交，
+  // 保证学生端"已批阅历史"和老师端隐藏行为一致。
   const { data, error } = await supabase()
     .from("submissions")
-    .select("*")
+    .select("*, task:tasks!inner(deleted_at)")
     .eq("student_id", studentId)
+    .is("task.deleted_at", null)
     .order("submitted_at", { ascending: false })
   if (error) throw error
-  return (data ?? []) as Submission[]
+  // 剥离 join 返回的 task 字段，保持返回结构与之前一致
+  return (data ?? []).map(({ task: _ignored, ...rest }: any) => rest) as Submission[]
 }
 
 export async function getSubmissionByStudentTask(

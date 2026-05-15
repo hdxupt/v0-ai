@@ -22,10 +22,26 @@ export const CorrectionDetailSchema = z.object({
     .max(100)
     .optional()
     .describe("该项相对满分的扣分或加分（错题给负数，亮点给 0 或正数）"),
+  /**
+   * 该批注覆盖的 OCR 行号（全局唯一，对应 buildTranscriptForLLM 输出里的 L1/L2/...）。
+   * 服务端会把这些行号对应的真实 OCR bbox 取并集，得到该批注的最终位置框。
+   */
+  line_indexes: z
+    .array(z.number().int().min(1))
+    .min(1)
+    .max(20)
+    .describe("批注命中的 OCR 行号数组，至少 1 个；服务端据此合成 bbox"),
+  /**
+   * （可选）模型自行估算的 fallback bbox，仅当 line_indexes 全部找不到时使用。
+   * [y, x, h, w] 单位 0~100。
+   */
   bounding_box: z
     .tuple([z.number(), z.number(), z.number(), z.number()])
-    .describe("[y, x, h, w] 0~100 整数"),
-  confidence: z.number().min(0).max(1).describe("bbox 位置的置信度"),
+    .optional()
+    .describe("可选 fallback bbox（line_indexes 优先）"),
+  /** （可选）页码索引，0-based；默认 0，多页提交时模型必须明确 */
+  page_index: z.number().int().min(0).optional().describe("0-based 页码"),
+  confidence: z.number().min(0).max(1).describe("整体置信度"),
 })
 export type CorrectionDetail = z.infer<typeof CorrectionDetailSchema>
 

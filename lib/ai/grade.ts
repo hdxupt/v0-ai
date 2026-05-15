@@ -9,6 +9,12 @@ import {
 import { GradingResultSchema, type GradingResult } from "./schemas"
 import { AI_MODELS, GRADING_TIMEOUT_MS, GRADING_MAX_OUTPUT_TOKENS } from "./config"
 import { getGateway } from "./gateway"
+import {
+  ocrSubmission,
+  buildTranscriptForLLM,
+  findLineByIndex,
+  type OcrData,
+} from "@/lib/ocr/tencent"
 
 /**
  * 从私有 Blob 拉取图片字节，转成 AI SDK 6 可以直接喂的 data URL。
@@ -57,6 +63,12 @@ export interface AIGradePayload {
     correction_details: GradingResult["correction_details"]
     radar_analysis: GradingResult["radar_analysis"]
   }
+  /**
+   * 本次批改使用的 OCR 数据。
+   * 调用方应把它写入 submissions.ocr_data 字段，下次重批改可复用避免重复 OCR。
+   * 当 OCR 服务调用失败时为 null（仍能跑通批改，只是 bbox 退化到 VLM fallback）。
+   */
+  ocr_data: OcrData | null
 }
 
 /**
@@ -70,6 +82,10 @@ export interface AIGradePayload {
 export async function gradeSubmissionWithAI(
   submission: Submission,
   task: Task,
+  options?: {
+    /** 已有的 OCR 缓存。提供则跳过 OCR 调用直接复用，省钱省时。 */
+    cachedOcrData?: OcrData | null
+  },
 ): Promise<AIGradePayload> {
   const subject = resolveSubject(task.subject)
   const imageUrls = (submission.image_urls ?? []).slice(0, 9)
@@ -77,6 +93,24 @@ export async function gradeSubmissionWithAI(
     throw new Error("学生未上传任何作业图片，无法批改")
   }
 
+  /* ----------------- 阶段 1：OCR 转录（或复用缓存） ----------------- */
+  let ocrData: OcrData | null = options?.cachedOcrData ?? null
+  if (!ocrData) {
+    try {
+      console.log("[v0] grade: running OCR on", imageUrls.length, "image(s)")
+      ocrData = await ocrSubmission(imageUrls)
+      const totalLines = ocrData.pages.reduce((s, p) => s + p.lines.length, 0)
+      console.log("[v0] grade: OCR done, total lines =", totalLines)
+    } catch (e: any) {
+      console.error("[v0] grade: OCR failed, falling back to VLM-only:", e?.message)
+      ocrData = null
+    }
+  } else {
+    console.log("[v0] grade: using cached OCR data")
+  }
+  const ocrTranscript = ocrData ? buildTranscriptForLLM(ocrData) : ""
+
+  /* ----------------- 阶段 2：构造 prompt ----------------- */
   const system = buildGradeSystemPrompt(subject)
   const userText = buildGradeUserPrompt({
     subject,
@@ -86,6 +120,7 @@ export async function gradeSubmissionWithAI(
     totalScore: 100,
     studentName: submission.student_name,
     studentNote: submission.note,
+    ocrTranscript,
   })
 
   // 把每张私有图片转成 base64 data URL，再喂给视觉模型
@@ -122,21 +157,8 @@ export async function gradeSubmissionWithAI(
 
     const scaledScore = Math.max(0, Math.min(100, object.summary.total_score))
 
-    // -------- 硬过滤：剔除"整行/整段"过大 bbox，避免框选过粗 --------
-    // bounding_box = [y, x, h, w]，单位 0~100。
-    // 拒绝标准：宽 > 60，高 > 15，或面积 > 480。这种框基本是"整行带过"。
-    const MAX_W = 60
-    const MAX_H = 15
-    const MAX_AREA = 480
-    const filteredDetails = object.correction_details.filter((d) => {
-      const bb = d.bounding_box
-      if (!bb || bb.length !== 4) return false
-      const [, , h, w] = bb
-      if (w <= 0 || h <= 0) return false
-      if (w > MAX_W || h > MAX_H) return false
-      if (w * h > MAX_AREA) return false
-      return true
-    })
+    /* ----------------- 阶段 3：把 line_indexes 解析成真实 bbox ----------------- */
+    const resolvedDetails = resolveCorrectionBboxes(object.correction_details, ocrData)
 
     return {
       score: scaledScore,
@@ -147,13 +169,92 @@ export async function gradeSubmissionWithAI(
         model: AI_MODELS.grading,
         graded_subject: subject,
         summary: object.summary,
-        correction_details: filteredDetails,
+        correction_details: resolvedDetails,
         radar_analysis: object.radar_analysis,
       },
+      ocr_data: ocrData,
     }
   } finally {
     clearTimeout(timer)
   }
+}
+
+/**
+ * 把 LLM 返回的 line_indexes（OCR 行号数组）解析成真实 bbox。
+ *
+ * 规则：
+ * 1. 若 line_indexes 至少有 1 个有效行号 → bbox = 这些行 OCR bbox 的并集（取外接矩形）+ 4% 内边距，让框稍微贴一点四周；
+ * 2. 若 line_indexes 全部无效但 fallback bounding_box 存在 → 用 fallback，并跑老的"超大框"过滤；
+ * 3. 否则丢弃该条批注。
+ *
+ * 同时为每条 detail 补齐 page_index（取首个命中行所在页）。
+ */
+function resolveCorrectionBboxes(
+  details: GradingResult["correction_details"],
+  ocrData: OcrData | null,
+): GradingResult["correction_details"] {
+  const MAX_W = 90
+  const MAX_H = 25
+  const PADDING = 1 // 百分比内边距
+
+  const out: GradingResult["correction_details"] = []
+  for (const d of details) {
+    let bbox: [number, number, number, number] | null = null
+    let pageIndex: number | undefined = d.page_index
+
+    // ---- 优先：line_indexes 路径 ----
+    if (ocrData && d.line_indexes && d.line_indexes.length > 0) {
+      const hits = d.line_indexes
+        .map((i) => findLineByIndex(ocrData, i))
+        .filter((x): x is NonNullable<typeof x> => x !== null)
+
+      if (hits.length > 0) {
+        const firstPage = hits[0]!.pageIndex
+        const samePageHits = hits.filter((h) => h.pageIndex === firstPage)
+
+        let yMin = 100,
+          yMax = 0,
+          xMin = 100,
+          xMax = 0
+        for (const h of samePageHits) {
+          const [y, x, hh, w] = h.line.bbox
+          yMin = Math.min(yMin, y)
+          yMax = Math.max(yMax, y + hh)
+          xMin = Math.min(xMin, x)
+          xMax = Math.max(xMax, x + w)
+        }
+        yMin = Math.max(0, Math.round(yMin - PADDING))
+        xMin = Math.max(0, Math.round(xMin - PADDING))
+        const h = Math.min(100 - yMin, Math.round(yMax - yMin + PADDING * 2))
+        const w = Math.min(100 - xMin, Math.round(xMax - xMin + PADDING * 2))
+        if (h > 0 && w > 0) {
+          bbox = [yMin, xMin, h, w]
+          pageIndex = firstPage
+        }
+      }
+    }
+
+    // ---- 备选：fallback bounding_box ----
+    if (!bbox && d.bounding_box) {
+      const [, , hh, w] = d.bounding_box
+      if (hh > 0 && w > 0 && w <= MAX_W && hh <= MAX_H) {
+        bbox = d.bounding_box
+        if (pageIndex === undefined) pageIndex = 0
+      }
+    }
+
+    if (!bbox) {
+      console.log("[v0] grade: drop detail (no resolvable bbox), id=", d.id)
+      continue
+    }
+
+    out.push({
+      ...d,
+      bounding_box: bbox,
+      page_index: pageIndex ?? 0,
+    })
+  }
+  return out
 }
 
 /**

@@ -34,42 +34,34 @@ export function resolveSubject(raw: string | null | undefined): SubjectKey {
 /* -------------------------------------------------------------------------- */
 
 const BASE_GROUNDING = `
-【核心空间感知指令 · Visual Grounding（精确到词/步骤级，硬性约束）】
-你必须把图片视为一个 100x100 的相对坐标系（左上角 [0,0]，右下角 [100,100]）。
-对于你发现的每一个错误、亮点或缺漏，必须估算它在图片上的相对位置，
-并返回 bounding_box = [Y轴百分比, X轴百分比, 高度百分比, 宽度百分比]。
-所有数值必须是 0~100 的整数。
+【批注定位协议 · 基于 OCR 行号（不再估算像素坐标）】
+你看到的图片旁边，会附带一份由 OCR 服务转录的【带全局行号 + 页码】的纯文本，
+形如：
+    【第 1 页】
+    L1: 你我之梦，中国之梦
+    L2: 十八年前，废寝忘食，我朦胧新干
+    ...
 
-【定位作业流程 — 你必须按这个流程内部"对齐三次"再下笔写 bbox】
-1. 先在心里读出图片整体版式（几列、几行、有无分栏），把版面分成 3x3 九宫格。
-2. 找出目标词/算式属于哪一个九宫格，得到粗略中心点。
-3. 再在那个九宫格内做细分：估出目标在该格内的相对偏移，得到精确中心点 (cx, cy)。
-4. 根据目标实际占据的字符宽度/算式长度，给出紧贴目标的 width/height。
-5. 输出 bbox = [cy - height/2, cx - width/2, height, width]，且整体偏差 ≤ 3%。
-若任何一步无法确认（如手写潦草、行号遮挡），降低 confidence，confidence < 0.55 时直接舍弃这个 bbox，宁可不画也不要画错。
+你的任务变成：对每一处错误 / 亮点 / 缺漏，告诉我它落在哪一行或哪几行（OCR 行号）。
+- 不需要再估算像素坐标或百分比。坐标系统已由 OCR 真实测量并由服务端自动合成。
+- 在 correction_details[i].line_indexes 字段里填入命中的行号数组。例：[3] 表示只命中 L3；[5,6] 表示这条点评跨 L5 和 L6 两行。
+- 同时填 page_index（0-based）。多页时务必正确分页，不要把 第 2 页的 L23 写成 page_index=0。
 
-【尺寸硬性约束 — 违反即视为不合格】
-- 单个 bbox 的"宽度 × 高度"必须 ≤ 350（举例：宽25×高14、宽40×高8、宽18×高20 均合格）。
-- 严禁把整行 / 整段 / 整道题一框带过：宽度不得超过 60，高度不得超过 15。
-- 一个 bbox 应紧贴目标文字本身：通常 word/短语级宽度 8 ~ 30，单步骤公式宽度 15 ~ 40，高度 4 ~ 10。
-- 如果一个错误涉及多处不连续位置，请拆成多个独立 bbox，而不是用一个大框包住。
-- 若你不能确定具体位置在哪一个词/步骤，请直接舍弃该 bbox（confidence 设为 0 不输出），而不是用大框糊弄。
+【若 OCR 没识别到目标怎么办】
+- 偶尔 OCR 会漏掉某行（手写太潦草、有涂改、有公式图）。这种情况下：
+  · 优先把点评附在 OCR 真实存在的"最相近一行"上（line_indexes 仍要给真实存在的行号）。
+  · 如果实在找不到对应行（如批注的是一段完全没被 OCR 识别的图块），你可以**额外**填一个 fallback bounding_box = [y, x, h, w]，单位 0~100 整数。但优先级最低，仅在 line_indexes 行号全无效时由服务端启用。
+- 永远不要编造一个不存在的 OCR 行号；宁可用 fallback bbox。
 
 【内容对齐要求】
-- 每个 bbox 对应的 comment / process_analysis 字段，必须以单引号引用框内"原文片段"（学生写的原话/原式），格式："'<原文>' —— <点评>"。
-- 这条规则强制你聚焦到具体的词/算式，而不是泛泛而谈。
-- 每条点评必须简洁：单引号原文之外，点评正文**不超过 60 个汉字 / 100 个英文字符**，一句话讲清"错在哪 + 正解是什么"即可。
-- 严禁在 process_analysis 里复述大段题目背景、推导整道题的解法 —— 那是 teacher_comment 的工作。
-- 例：comment: "'more frequent' —— 比较级要用 'occurring more frequently'，更符合英文进行时表达。"
-- 例：comment: "'a²=3b²' —— 代换正确，但漏写 'b²>0' 前提，会丢半角分。"
+- 每条 process_analysis 必须以"单引号引用学生原文片段"开头，格式：'<原文>' —— <点评>。
+  例：'more frequent' —— 应用进行时 occurring more frequently。
+  例：'a²=3b²' —— 代换正确，但漏写 b²>0 前提。
+- 点评正文不超过 60 个汉字 / 100 个英文字符；只说"错在哪 + 怎么改"，不要复述题目背景。
 
-【置信度】
-- 每个 bbox 必须配 confidence ∈ [0,1]。低于 0.55 的请直接舍弃，不要写入。
-- 多数 bbox 的 confidence 应集中在 0.7 ~ 0.95。
-
-【数量参考】
-- 一份普通作业，errors + partials + highlights 总数通常在 5 ~ 15 个之间。
-- 不要为凑数生成大框；宁可少而准，不要多而泛。
+【置信度 + 数量】
+- confidence ∈ [0,1]，< 0.55 直接舍弃该条。
+- 普通作业 errors + partials + highlights 合计 5 ~ 15 条，宁少勿滥。
 `
 
 const BASE_OUTPUT_CONTRACT = `
@@ -164,6 +156,12 @@ export interface BuildGradePromptInput {
   totalScore: number
   studentName: string
   studentNote?: string | null
+  /**
+   * OCR 转录文本（buildTranscriptForLLM 输出）。
+   * 当 OCR 服务可用时，这是模型主要的定位依据 — 模型据此填 line_indexes。
+   * 若为空字符串，模型会退化到 fallback bounding_box 路径。
+   */
+  ocrTranscript?: string
 }
 
 /**
@@ -210,9 +208,23 @@ export function buildGradeUserPrompt(input: BuildGradePromptInput): string {
   if (input.studentNote) {
     lines.push(`- 学生留言：${input.studentNote.replace(/\s+/g, " ").slice(0, 400)}`)
   }
+
+  if (input.ocrTranscript && input.ocrTranscript.trim().length > 0) {
+    lines.push(
+      ``,
+      `【OCR 转录（已带行号 + 页码，请据此填写 line_indexes / page_index）】`,
+      input.ocrTranscript,
+    )
+  } else {
+    lines.push(
+      ``,
+      `【提示】本次未提供 OCR 转录。请直接根据图片自行识别内容，并使用 fallback bounding_box 字段定位每条批注。`,
+    )
+  }
+
   lines.push(
     ``,
-    `请仔细识别每一张图片中的手写内容，按本系统的规则进行 visual grounding 与判分，并输出结构化结果。`,
+    `请按 system 中的规则批改并输出结构化结果。务必：每条 correction_details 至少给出 line_indexes（OCR 可用时）或 bounding_box（OCR 不可用时）。`,
   )
   return lines.join("\n")
 }

@@ -231,19 +231,26 @@ export async function updateSubmissionGrading(
     task_title: string
     class_id: string
     teacher_name: string
+    /** 可选：OCR 缓存。提供则一并写入 submissions.ocr_data 字段。 */
+    ocr_data?: any
   },
 ): Promise<Submission> {
+  const update: Record<string, unknown> = {
+    score: payload.score,
+    ai_comment: payload.ai_comment,
+    teacher_comment: payload.teacher_comment,
+    ai_issues: payload.ai_issues,
+    weak_points: payload.weak_points,
+    status: "graded",
+    graded_at: new Date().toISOString(),
+  }
+  if (payload.ocr_data !== undefined) {
+    update.ocr_data = payload.ocr_data
+  }
+
   const { data, error } = await supabase()
     .from("submissions")
-    .update({
-      score: payload.score,
-      ai_comment: payload.ai_comment,
-      teacher_comment: payload.teacher_comment,
-      ai_issues: payload.ai_issues,
-      weak_points: payload.weak_points,
-      status: "graded",
-      graded_at: new Date().toISOString(),
-    })
+    .update(update)
     .eq("id", submissionId)
     .select()
     .single()

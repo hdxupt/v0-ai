@@ -119,6 +119,12 @@ export interface Submission {
   weak_points: WeakPointField[]
   submitted_at: string
   graded_at: string | null
+  /**
+   * 腾讯云 OCR 转录缓存。
+   * 结构见 lib/ocr/tencent.ts:OcrData。重批改时直接复用，避免重复 OCR 调用。
+   * 旧数据可能为 null。
+   */
+  ocr_data?: unknown
 }
 
 /* ---- helpers (pure, can be imported from server & client) ---- */

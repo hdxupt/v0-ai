@@ -29,7 +29,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   /* -------------------------------- AI 批改 -------------------------------- */
   if (body?.action === "ai") {
     try {
-      const payload = await gradeSubmissionWithAI(submission, task)
+      // 复用已有 OCR 缓存（避免重批改时再次烧调用额度）
+      const cachedOcr = (submission as any).ocr_data ?? null
+      const payload = await gradeSubmissionWithAI(submission, task, {
+        cachedOcrData: cachedOcr,
+      })
       const updated = await updateSubmissionGrading(id, {
         score: payload.score,
         ai_comment: payload.ai_comment,
@@ -42,6 +46,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         task_title: task.title,
         class_id: submission.class_id,
         teacher_name: teacher.name,
+        ocr_data: payload.ocr_data,
       })
       return NextResponse.json({ submission: updated })
     } catch (err: any) {

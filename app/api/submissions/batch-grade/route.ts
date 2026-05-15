@@ -59,7 +59,10 @@ export async function POST(req: NextRequest) {
       const task = taskMap.get(sub.task_id)
       if (!task) throw new Error("作业不存在")
 
-      const payload = await gradeSubmissionWithAI(sub, task)
+      const cachedOcr = (sub as any).ocr_data ?? null
+      const payload = await gradeSubmissionWithAI(sub, task, {
+        cachedOcrData: cachedOcr,
+      })
       await updateSubmissionGrading(sub.id, {
         score: payload.score,
         ai_comment: payload.ai_comment,
@@ -72,6 +75,7 @@ export async function POST(req: NextRequest) {
         task_title: task.title,
         class_id: sub.class_id,
         teacher_name: user.name,
+        ocr_data: payload.ocr_data,
       })
       return {
         id: sub.id,

@@ -1,16 +1,19 @@
 "use client"
 
 import { useState } from "react"
-import { Sparkles, Clock, CheckCircle2, Target, Trophy, MessageCircle } from "lucide-react"
+import { Sparkles, Clock, CheckCircle2, Target, Trophy, MessageCircle, FileText, ImageIcon } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils"
 import { formatRelativeTime } from "@/lib/format"
 import { toViewerBoxes, normalizeWeakPoints, type Submission, type Task, type ViewerBox } from "@/lib/types"
+import { isAIGradingV2 } from "@/lib/types"
 import { toFileSrc } from "@/lib/blob-url"
 import { AiCommentStructured } from "@/components/student/ai-comment-structured"
 import { AnnotationDetailList } from "@/components/student/annotation-detail-list"
+import { OcrTranscriptPanel, type TranscriptAnnotation } from "@/components/grading/ocr-transcript-panel"
 
 export function SubmissionResult({ submission, task }: { submission: Submission; task: Task }) {
   const isGraded = submission.status === "graded"
@@ -181,7 +184,7 @@ function GradedView({ submission, task }: { submission: Submission; task: Task }
         </Card>
       )}
 
-      {/* Answer images + linked annotation list */}
+      {/* Answer images + transcript tabs + linked annotation list */}
       <Card className="p-5 space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -192,12 +195,37 @@ function GradedView({ submission, task }: { submission: Submission; task: Task }
             共 {submission.image_urls.length} 张 · {viewerBoxes.length} 处批注
           </span>
         </div>
-        <ImageGallery
-          pathnames={submission.image_urls}
-          annotations={viewerBoxes}
-          activeBoxId={activeBoxId}
-          onHoverBox={setActiveBoxId}
-        />
+
+        <Tabs defaultValue="image" className="w-full">
+          <TabsList className="grid w-full max-w-xs grid-cols-2">
+            <TabsTrigger value="image" className="flex items-center gap-1.5 text-xs">
+              <ImageIcon className="w-3.5 h-3.5" />
+              原图批注
+            </TabsTrigger>
+            <TabsTrigger value="transcript" className="flex items-center gap-1.5 text-xs">
+              <FileText className="w-3.5 h-3.5" />
+              文字版
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="image" className="space-y-4 mt-4">
+            <ImageGallery
+              pathnames={submission.image_urls}
+              annotations={viewerBoxes}
+              activeBoxId={activeBoxId}
+              onHoverBox={setActiveBoxId}
+            />
+          </TabsContent>
+          <TabsContent value="transcript" className="mt-4">
+            <OcrTranscriptPanel
+              ocrData={submission.ocr_data}
+              annotations={buildTranscriptAnnotations(submission.ai_issues, viewerBoxes)}
+              activeBoxId={activeBoxId}
+              onHoverLine={setActiveBoxId}
+              emptyHint="本次提交未启用 OCR 转录，或服务暂时不可用"
+            />
+          </TabsContent>
+        </Tabs>
+
         {viewerBoxes.length > 0 && (
           <>
             <div className="border-t border-border" />
@@ -211,6 +239,25 @@ function GradedView({ submission, task }: { submission: Submission; task: Task }
       </Card>
     </>
   )
+}
+
+/**
+ * 把 ai_issues v2 的 correction_details 转成 transcript panel 用的精简注解列表。
+ * id 与 viewerBoxes 同源，使 hover 联动统一。
+ */
+function buildTranscriptAnnotations(
+  aiIssues: Submission["ai_issues"],
+  _viewerBoxes: ViewerBox[],
+): TranscriptAnnotation[] {
+  if (!isAIGradingV2(aiIssues)) return []
+  const details = aiIssues.correction_details ?? []
+  return details.map((d, idx) => ({
+    // 与 toViewerBoxes 的 id 命名规则保持一致，确保 hover 状态联动
+    id: `v2-${d.id ?? idx}`,
+    ordinal: idx + 1,
+    type: d.type,
+    line_indexes: (d as any).line_indexes ?? undefined,
+  }))
 }
 
 function ImageGallery({

@@ -148,7 +148,8 @@ export async function ocrOnePage(
   for (const d of detections) {
     const text = (d.DetectedText ?? "").trim()
     if (!text) continue
-    const item = d.ItemCoord as
+    // 字段差异：GeneralAccurateOCR 返回 ItemPolygon；BasicOCR 返回 ItemCoord。兼容两者。
+    const item = (d.ItemPolygon ?? d.ItemCoord) as
       | { X: number; Y: number; Width: number; Height: number }
       | undefined
     if (!item || item.Width <= 0 || item.Height <= 0) continue

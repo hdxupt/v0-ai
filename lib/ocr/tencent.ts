@@ -131,16 +131,14 @@ export async function ocrOnePage(
 
   const client = getClient()
   /**
-   * 选用 GeneralBasicOCR（通用印刷体识别 - 基础版）：
-   *  - 每月 1000 次免费额度（用户在控制台点"立即开通"开通的就是这个）
-   *  - 同时识别印刷体和手写体，对学生作文卷面足够
-   *  - 返回 ItemCoord {X,Y,Width,Height}（像素，左上角原点），方便换算成 0~100% bbox
-   * 若未来精度不够，可换 GeneralAccurateOCR（高精度版）或 GeneralHandwritingOCR（手写专版），
-   * 但都需要单独购买资源包，不在免费额度里。
+   * 选用 GeneralAccurateOCR（通用文字识别 · 高精度版）：
+   *  - 已开通 + 后付费，每月 1000 次免费额度。
+   *  - 对手写中文、混合排版、算式识别精度显著高于 BasicOCR。
+   *  - 返回 ItemCoord {X,Y,Width,Height}（像素，左上原点）+ 行级 Confidence。
+   * 备选：BasicOCR（更便宜，清晰印刷体首选）、HandwritingOCR（专攻手写，独立计费）。
    */
-  const resp = await client.GeneralBasicOCR({
+  const resp = await client.GeneralAccurateOCR({
     ImageBase64: buf.toString("base64"),
-    LanguageType: "zh", // 中文 + 数字 + 英文混排
   })
 
   const detections = resp.TextDetections ?? []

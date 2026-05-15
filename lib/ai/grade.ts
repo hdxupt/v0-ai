@@ -136,24 +136,49 @@ export async function gradeSubmissionWithAI(
 
   try {
     const gateway = getGateway()
-    const { object } = await generateObject({
-      model: gateway(AI_MODELS.grading),
-      schema: GradingResultSchema,
-      maxOutputTokens: GRADING_MAX_OUTPUT_TOKENS,
-      system,
-      messages: [
-        {
-          role: "user",
-          content: userContent,
-          // providerOptions 由 AI Gateway 透传到 Anthropic 实现 prompt caching
-          providerOptions: {
-            anthropic: { cacheControl: { type: "ephemeral" } },
+    let object: GradingResult
+    try {
+      const result = await generateObject({
+        model: gateway(AI_MODELS.grading),
+        schema: GradingResultSchema,
+        maxOutputTokens: GRADING_MAX_OUTPUT_TOKENS,
+        system,
+        messages: [
+          {
+            role: "user",
+            content: userContent,
+            // providerOptions 由 AI Gateway 透传到 Anthropic 实现 prompt caching
+            providerOptions: {
+              anthropic: { cacheControl: { type: "ephemeral" } },
+            },
           },
-        },
-      ],
-      abortSignal: controller.signal,
-      maxRetries: 1,
-    })
+        ],
+        abortSignal: controller.signal,
+        maxRetries: 1,
+      })
+      object = result.object
+    } catch (e: any) {
+      // generateObject 不会跑我们 schema 上的 z.preprocess（它直接调底层 validate）。
+      // Claude 在输出长 JSON 时偶尔会把嵌套数组序列化为字符串，导致 AI_TypeValidationError。
+      // 此时从 e.cause.value 拿到原始对象，用 schema.parse() 走我们的 preprocess 修复。
+      const rawValue =
+        e?.cause?.value ?? e?.value ?? e?.cause?.text ?? e?.text ?? null
+      const looksLikeValidationError =
+        e?.name === "AI_TypeValidationError" ||
+        e?.cause?.name === "ZodError" ||
+        (e?.message ?? "").includes("response did not match schema")
+      if (!looksLikeValidationError || rawValue == null) {
+        throw e
+      }
+      console.warn("[v0] grade: AI returned stringified nested JSON, recovering via Zod preprocess")
+      const candidate = typeof rawValue === "string" ? JSON.parse(rawValue) : rawValue
+      const parsed = GradingResultSchema.safeParse(candidate)
+      if (!parsed.success) {
+        console.error("[v0] grade: manual reparse also failed:", parsed.error.issues)
+        throw e
+      }
+      object = parsed.data
+    }
 
     const scaledScore = Math.max(0, Math.min(100, object.summary.total_score))
 

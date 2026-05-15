@@ -1,5 +1,20 @@
 import { z } from "zod"
 
+/**
+ * 兼容 LLM 偶尔把数组序列化成字符串的情形（Claude Sonnet 在 AI Gateway 上输出长 JSON 时偶发）。
+ * 把 `[ {...}, {...} ]` 这种字符串自动解析为真实数组；其它情况原样返回。
+ */
+function parseMaybeJsonString<T>(val: unknown): unknown {
+  if (typeof val !== "string") return val
+  const trimmed = val.trim()
+  if (!trimmed.startsWith("[") && !trimmed.startsWith("{")) return val
+  try {
+    return JSON.parse(trimmed)
+  } catch {
+    return val
+  }
+}
+
 /* ============================== 单卷批改结果 ============================== */
 
 export const BboxTypeEnum = z.enum(["error", "partial", "highlight", "missing"])
@@ -26,11 +41,14 @@ export const CorrectionDetailSchema = z.object({
    * 该批注覆盖的 OCR 行号（全局唯一，对应 buildTranscriptForLLM 输出里的 L1/L2/...）。
    * 服务端会把这些行号对应的真实 OCR bbox 取并集，得到该批注的最终位置框。
    */
-  line_indexes: z
-    .array(z.number().int().min(1))
-    .min(1)
-    .max(20)
-    .describe("批注命中的 OCR 行号数组，至少 1 个；服务端据此合成 bbox"),
+  line_indexes: z.preprocess(
+    parseMaybeJsonString,
+    z
+      .array(z.number().int().min(1))
+      .min(1)
+      .max(20)
+      .describe("批注命中的 OCR 行号数组，至少 1 个；服务端据此合成 bbox"),
+  ),
   /**
    * （可选）模型自行估算的 fallback bbox，仅当 line_indexes 全部找不到时使用。
    * [y, x, h, w] 单位 0~100。
@@ -61,13 +79,19 @@ export const GradingSummarySchema = z.object({
   correct_count: z.number().int().min(0),
   wrong_count: z.number().int().min(0),
   total_detected_questions: z.number().int().min(0),
-  weak_points: z.array(z.string().min(2).max(30)).min(0).max(3).describe("1~3 个核心薄弱知识点短语"),
+  weak_points: z.preprocess(
+    parseMaybeJsonString,
+    z.array(z.string().min(2).max(30)).min(0).max(3).describe("1~3 个核心薄弱知识点短语"),
+  ),
 })
 export type GradingSummary = z.infer<typeof GradingSummarySchema>
 
 export const GradingResultSchema = z.object({
-  summary: GradingSummarySchema,
-  correction_details: z.array(CorrectionDetailSchema).max(40),
+  summary: z.preprocess(parseMaybeJsonString, GradingSummarySchema),
+  correction_details: z.preprocess(
+    parseMaybeJsonString,
+    z.array(CorrectionDetailSchema).max(40),
+  ),
   teacher_comment: z
     .string()
     .min(20)
@@ -80,7 +104,7 @@ export const GradingResultSchema = z.object({
         "(4) 用'相信下次作业一定会有明显进步！'之类的一句鼓励收尾。" +
         "禁止省略'第一/第二/第三'这类序号词，禁止用'第1题/第2题'代替（题号请放进具体描述里）。",
     ),
-  radar_analysis: RadarAnalysisSchema,
+  radar_analysis: z.preprocess(parseMaybeJsonString, RadarAnalysisSchema),
 })
 export type GradingResult = z.infer<typeof GradingResultSchema>
 

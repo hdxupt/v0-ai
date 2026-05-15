@@ -1,40 +1,41 @@
 /**
  * 腾讯云 OCR 客户端
  * -------------------------------------------------------------
- * 用途：把学生作业图片转写成 "行级文本 + 行级真实坐标" 列表，
+ * 用途：把学生作业图片转写成"行级文本 + 行级真实坐标"列表，
  *      给批改 pipeline 提供两样东西：
- *        1. 行号化纯文本（喂给 LLM，让 LLM 只判断"哪一行有错"）
- *        2. 每一行在原图上的真实 bbox（前端画框时直接用，避免 VLM 估坐标）
+ *        1) 行号化纯文本（喂给 LLM，让 LLM 只判断"哪一行有错"）
+ *        2) 每一行在原图上的真实 bbox（前端画框时直接用，避免 VLM 估坐标）
  *
- * 接口：通用印刷体 + 中文手写体识别 GeneralHandwritingOCR
+ * 接口：GeneralHandwritingOCR（通用印刷体 + 中文手写体识别）
  *      文档 https://cloud.tencent.com/document/product/866/36212
+ *      每月 1000 次免费额度，¥0.025/次。
  *
- * 调用一次 ¥0.025，每月 1000 次免费额度。
- *
- * 注意：腾讯云 OCR 限制单张图片 base64 后大小 ≤ 7MB、像素 ≤ 8192×8192。
- *      因为上传链路前端已经把图片压到 ≤ 4MB / 长边 2400px，这里不会超限。
+ * 限制：单张图片 base64 ≤ 7MB、像素 ≤ 8192×8192。
+ *      上传链路前端已经把图压到 ≤ 4MB / 长边 2400px，不会超限。
  */
 
 import { ocr } from "tencentcloud-sdk-nodejs-ocr"
+import { imageSize } from "image-size"
 
 const OcrClient = ocr.v20181119.Client
 
 /* ----------------------------- 类型 ----------------------------- */
 
-/** 单行 OCR 结果，坐标归一化为 0~100 整数百分比 */
 export interface OcrLine {
   /** 全局行号，从 1 开始（多张图片跨页连续递增） */
   index: number
   text: string
-  /** [y, x, h, w] 0~100 整数百分比 */
+  /** [y, x, h, w]，每个值为 0~100 整数百分比 */
   bbox: [number, number, number, number]
-  /** 0~1 */
+  /** 0~1 置信度 */
   confidence: number
 }
 
 export interface OcrPage {
   image_url: string
+  /** 原图像素宽 */
   width: number
+  /** 原图像素高 */
   height: number
   lines: OcrLine[]
 }
@@ -61,128 +62,149 @@ function getClient(): InstanceType<typeof OcrClient> {
   }
   _client = new OcrClient({
     credential: { secretId: SecretId, secretKey: SecretKey },
-    // 区域：ap-shanghai latency 国内最稳；接口本身全国通用
     region: "ap-shanghai",
-    profile: {
-      // 60 秒超时（手写体识别单张通常 1~3 秒，留足上传 base64 的余量）
-      httpProfile: { reqTimeout: 60 },
-    },
+    profile: { httpProfile: { reqTimeout: 60 } },
   })
   return _client
 }
 
-/* ----------------------------- 主函数 ----------------------------- */
+/* ----------------------------- 工具函数 ----------------------------- */
+
+function clampPct(v: number, min = 0, max = 100): number {
+  const n = Math.round(v)
+  if (n < min) return min
+  if (n > max) return max
+  return n
+}
+
+/** 抓图字节 — 用于解析像素尺寸 + 转 base64 */
+async function fetchImageBuffer(url: string): Promise<Buffer> {
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`fetch image failed: ${res.status} ${url}`)
+  const ab = await res.arrayBuffer()
+  return Buffer.from(ab)
+}
+
+/* ----------------------------- 单页 OCR ----------------------------- */
 
 /**
- * 把一张图片 base64 发给腾讯云，得到 OCR 行列表。
- * 坐标会从腾讯返回的像素坐标换算到 0~100 整数百分比。
- *
- * @param imageBase64 不带 data: 前缀的纯 base64 字符串
- * @param baseLineIndex 多张图片跨页时，本张图行号应从这个值 + 1 开始
+ * 对单张图做手写体 OCR。
+ * @param imageUrl  公网可访问的图片 URL（Vercel Blob 即可）
+ * @param baseLineIndex 多页时上一页结束的行号，本页从 baseLineIndex+1 开始编号
+ * @returns 单页结果 + 全局下一个起点
  */
-export async function recognizeHandwritingPage(
-  imageBase64: string,
+export async function ocrOnePage(
+  imageUrl: string,
   baseLineIndex: number,
-): Promise<{ page: Omit<OcrPage, "image_url">; nextBaseIndex: number }> {
-  const client = getClient()
+): Promise<{ page: OcrPage; nextBaseIndex: number }> {
+  const buf = await fetchImageBuffer(imageUrl)
+  const dim = imageSize(buf)
+  const imgW = dim.width ?? 1
+  const imgH = dim.height ?? 1
 
-  // 腾讯云手写体识别接口：GeneralHandwritingOCR
-  // - EnableWordPolygon: true 才会返回每个字的多边形（我们行级就够了，所以 false）
-  // - Scene: 'word' 通用场景；'paper' 试卷/作文专用，对手写有专项优化
+  const client = getClient()
   const resp = await client.GeneralHandwritingOCR({
-    ImageBase64: imageBase64,
-    Scene: "paper",
+    ImageBase64: buf.toString("base64"),
+    Scene: "paper", // 试卷/作文专用场景，对手写有专项优化
     EnableWordPolygon: false,
   })
 
   const detections = resp.TextDetections ?? []
-  if (detections.length === 0) {
-    return {
-      page: { width: 0, height: 0, lines: [] },
-      nextBaseIndex: baseLineIndex,
-    }
-  }
-
-  // 腾讯返回的坐标在 ItemPolygon 字段里，单位是像素。
-  // 我们要把它换算到 0~100 整数百分比，需要先拿到图片宽高。
-  // 同一批 TextDetections 共享一张图片，所以拿任意一个的 Polygon 最大值近似图片宽高即可；
-  // 但为了精确，我们让前端在压缩阶段返回真实宽高 — 这里先从 Polygon 推断最大边界作 fallback。
-  let maxX = 0
-  let maxY = 0
-  for (const d of detections) {
-    const poly = (d as any).Polygon as Array<{ X: number; Y: number }> | undefined
-    if (poly) {
-      for (const p of poly) {
-        if (p.X > maxX) maxX = p.X
-        if (p.Y > maxY) maxY = p.Y
-      }
-    }
-    const item = (d as any).ItemPolygon as
-      | { X: number; Y: number; Width: number; Height: number }
-      | undefined
-    if (item) {
-      if (item.X + item.Width > maxX) maxX = item.X + item.Width
-      if (item.Y + item.Height > maxY) maxY = item.Y + item.Height
-    }
-  }
-  // 这只是 fallback；上层会用 sharp 解析真实尺寸再覆盖。
-  const widthPx = Math.max(maxX, 1)
-  const heightPx = Math.max(maxY, 1)
-
   let idx = baseLineIndex
   const lines: OcrLine[] = []
+
   for (const d of detections) {
-    const text = ((d as any).DetectedText as string | undefined)?.trim()
+    const text = (d.DetectedText ?? "").trim()
     if (!text) continue
-    const item = (d as any).ItemPolygon as
+    const item = d.ItemPolygon as
       | { X: number; Y: number; Width: number; Height: number }
       | undefined
-    if (!item) continue
-    const xPct = (item.X / widthPx) * 100
-    const yPct = (item.Y / heightPx) * 100
-    const wPct = (item.Width / widthPx) * 100
-    const hPct = (item.Height / heightPx) * 100
-    const conf = ((d as any).Confidence as number | undefined) ?? 50
+    if (!item || item.Width <= 0 || item.Height <= 0) continue
+    const conf = typeof d.Confidence === "number" ? d.Confidence / 100 : 0.9
     idx += 1
     lines.push({
       index: idx,
       text,
       bbox: [
-        Math.max(0, Math.min(100, Math.round(yPct))),
-        Math.max(0, Math.min(100, Math.round(xPct))),
-        Math.max(1, Math.min(100, Math.round(hPct))),
-        Math.max(1, Math.min(100, Math.round(wPct))),
+        clampPct((item.Y / imgH) * 100),
+        clampPct((item.X / imgW) * 100),
+        clampPct((item.Height / imgH) * 100, 1),
+        clampPct((item.Width / imgW) * 100, 1),
       ],
-      confidence: Math.max(0, Math.min(1, conf / 100)),
+      confidence: Math.max(0, Math.min(1, conf)),
     })
   }
 
   return {
-    page: { width: widthPx, height: heightPx, lines },
+    page: { image_url: imageUrl, width: imgW, height: imgH, lines },
     nextBaseIndex: idx,
   }
 }
 
-/* ----------------------------- 辅助：构造给 LLM 看的转录文本 ----------------------------- */
+/* ----------------------------- 整份提交 OCR ----------------------------- */
 
 /**
- * 把多页 OCR 结果拼成一份"带行号的转录稿"，喂给 LLM：
+ * 对一份提交（多张图片）做全量 OCR。
+ * 任意一页 OCR 失败不会让整份失败，失败页留空 lines。
+ */
+export async function ocrSubmission(imageUrls: string[]): Promise<OcrData> {
+  const pages: OcrPage[] = []
+  let nextIndex = 0
+  for (const url of imageUrls) {
+    try {
+      const { page, nextBaseIndex } = await ocrOnePage(url, nextIndex)
+      pages.push(page)
+      nextIndex = nextBaseIndex
+      console.log(`[v0] OCR page done: ${url} → ${page.lines.length} lines`)
+    } catch (e: any) {
+      console.error("[v0] OCR page failed:", url, e?.message)
+      pages.push({ image_url: url, width: 1, height: 1, lines: [] })
+    }
+  }
+  return {
+    version: 1,
+    provider: "tencent",
+    ocrd_at: new Date().toISOString(),
+    pages,
+  }
+}
+
+/* ----------------------------- 给 LLM 用的转录文本 ----------------------------- */
+
+/**
+ * 把 OcrData 渲染成带页号、带全局行号的纯文本，喂给 VLM 当"事实底稿"。
  *
  * 【第 1 页】
- *  L1: 你我之梦，中国之梦
- *  L2: 十八年前，废寝忘食，我朦胧新干
- *  L3: ...
+ * L1: 你我之梦，中国之梦
+ * L2: 十八年前，废寝忘食...
+ *
  * 【第 2 页】
- *  L23: ...
+ * L23: ...
  */
 export function buildTranscriptForLLM(ocrData: OcrData): string {
   const out: string[] = []
-  ocrData.pages.forEach((p, pageIdx) => {
-    out.push(`【第 ${pageIdx + 1} 页】`)
-    for (const ln of p.lines) {
-      out.push(`L${ln.index}: ${ln.text}`)
+  ocrData.pages.forEach((p, pi) => {
+    out.push(`【第 ${pi + 1} 页】`)
+    if (p.lines.length === 0) {
+      out.push("(本页 OCR 未识别到文字，请直接参考图片本身)")
+    } else {
+      for (const ln of p.lines) {
+        out.push(`L${ln.index}: ${ln.text}`)
+      }
     }
     out.push("")
   })
   return out.join("\n")
+}
+
+/** 按全局行号定位行所在的页和坐标 */
+export function findLineByIndex(
+  data: OcrData,
+  index: number,
+): { pageIndex: number; line: OcrLine } | null {
+  for (let pi = 0; pi < data.pages.length; pi++) {
+    const ln = data.pages[pi].lines.find((l) => l.index === index)
+    if (ln) return { pageIndex: pi, line: ln }
+  }
+  return null
 }

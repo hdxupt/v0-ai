@@ -130,10 +130,17 @@ export async function ocrOnePage(
   const imgH = dim.height ?? 1
 
   const client = getClient()
-  const resp = await client.GeneralHandwritingOCR({
+  /**
+   * 选用 GeneralBasicOCR（通用印刷体识别 - 基础版）：
+   *  - 每月 1000 次免费额度（用户在控制台点"立即开通"开通的就是这个）
+   *  - 同时识别印刷体和手写体，对学生作文卷面足够
+   *  - 返回 ItemCoord {X,Y,Width,Height}（像素，左上角原点），方便换算成 0~100% bbox
+   * 若未来精度不够，可换 GeneralAccurateOCR（高精度版）或 GeneralHandwritingOCR（手写专版），
+   * 但都需要单独购买资源包，不在免费额度里。
+   */
+  const resp = await client.GeneralBasicOCR({
     ImageBase64: buf.toString("base64"),
-    Scene: "paper", // 试卷/作文专用场景，对手写有专项优化
-    EnableWordPolygon: false,
+    LanguageType: "zh", // 中文 + 数字 + 英文混排
   })
 
   const detections = resp.TextDetections ?? []
@@ -143,7 +150,7 @@ export async function ocrOnePage(
   for (const d of detections) {
     const text = (d.DetectedText ?? "").trim()
     if (!text) continue
-    const item = d.ItemPolygon as
+    const item = d.ItemCoord as
       | { X: number; Y: number; Width: number; Height: number }
       | undefined
     if (!item || item.Width <= 0 || item.Height <= 0) continue

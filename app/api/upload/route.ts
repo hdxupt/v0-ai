@@ -4,7 +4,11 @@ import { type NextRequest, NextResponse } from "next/server"
 import { AUTH_COOKIE_NAME, deserializeUser } from "@/lib/auth"
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]
-const MAX_SIZE = 8 * 1024 * 1024 // 8 MB per file (iPhone HEIC photos can be ~7MB)
+/**
+ * 服务端最大单文件 10MB：浏览器端 `lib/image/compress.ts` 已经会把图片压到 ≤4MB，
+ * 这里 10MB 是双保险，防止极端浏览器（如旧版 Safari）压缩失败把原图直传上来。
+ */
+const MAX_SIZE = 10 * 1024 * 1024
 
 export async function POST(request: NextRequest) {
   try {

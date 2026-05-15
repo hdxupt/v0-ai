@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { formatDueDate } from "@/lib/format"
 import type { AppUser, Task, Submission } from "@/lib/types"
+import { compressImageForUpload, formatBytes } from "@/lib/image/compress"
 
 interface SubmitFormProps {
   task: Task
@@ -22,13 +23,19 @@ interface UploadingFile {
   id: string
   file: File
   previewUrl: string
-  status: "pending" | "uploading" | "done" | "error"
+  status: "pending" | "compressing" | "uploading" | "done" | "error"
   pathname?: string
   progress: number
+  /** 压缩前原始大小，用于 UI 显示"压缩比" */
+  originalSize?: number
 }
 
 const MAX_FILES = 9
-const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
+/**
+ * 兜底上限：单张原图最大 30MB（极端情况，例如 Pro 单反 RAW 转 JPEG）。
+ * 超过这个再走压缩也太慢、且基本不是手机拍照的合理场景。
+ */
+const HARD_LIMIT = 30 * 1024 * 1024
 
 export function SubmitForm({ task, student, existingSubmission }: SubmitFormProps) {
   const router = useRouter()
@@ -52,12 +59,14 @@ export function SubmitForm({ task, student, existingSubmission }: SubmitFormProp
       toast.warning(`最多只能上传 ${MAX_FILES} 张图片`)
     }
     const accepted = arr.slice(0, room).filter((f) => {
-      if (!f.type.startsWith("image/")) {
+      const isImage =
+        f.type.startsWith("image/") || /\.(heic|heif|jpe?g|png|webp)$/i.test(f.name)
+      if (!isImage) {
         toast.error(`${f.name} 不是图片文件`)
         return false
       }
-      if (f.size > MAX_FILE_SIZE) {
-        toast.error(`${f.name} 超过 5MB`)
+      if (f.size > HARD_LIMIT) {
+        toast.error(`${f.name} 体积超过 ${formatBytes(HARD_LIMIT)}，请先在系统相册里导出再上传`)
         return false
       }
       return true
@@ -69,6 +78,7 @@ export function SubmitForm({ task, student, existingSubmission }: SubmitFormProp
       previewUrl: URL.createObjectURL(f),
       status: "pending",
       progress: 0,
+      originalSize: f.size,
     }))
     setFiles((prev) => [...prev, ...newItems])
   }
@@ -98,22 +108,55 @@ export function SubmitForm({ task, student, existingSubmission }: SubmitFormProp
   }
 
   async function uploadOne(item: UploadingFile): Promise<string | null> {
+    // 第一步：客户端压缩。把任何尺寸的原图压到 ≤4MB / 长边 ≤2400px，再上传。
+    setFiles((prev) =>
+      prev.map((f) => (f.id === item.id ? { ...f, status: "compressing", progress: 10 } : f)),
+    )
+    const original = item.file
+    const toUpload = await compressImageForUpload(original)
+    const compressed = toUpload !== original
+    if (compressed) {
+      console.log(
+        "[v0] compress:",
+        original.name,
+        formatBytes(original.size),
+        "→",
+        formatBytes(toUpload.size),
+      )
+    }
+
     const form = new FormData()
-    form.append("file", item.file)
+    form.append("file", toUpload)
     form.append("scope", `submissions/${task.id}/${student.id}`)
 
-    setFiles((prev) => prev.map((f) => (f.id === item.id ? { ...f, status: "uploading", progress: 30 } : f)))
+    setFiles((prev) =>
+      prev.map((f) => (f.id === item.id ? { ...f, status: "uploading", progress: 40 } : f)),
+    )
 
     try {
       const res = await fetch("/api/upload", { method: "POST", body: form })
-      if (!res.ok) throw new Error("upload failed")
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}))
+        throw new Error(errBody?.error || `upload failed (${res.status})`)
+      }
       const data = await res.json()
-      setFiles((prev) => prev.map((f) => (f.id === item.id ? { ...f, status: "done", progress: 100, pathname: data.pathname } : f)))
-      toast.success(`图片上传成功（${item.file.name}）`, { duration: 1500 })
+      setFiles((prev) =>
+        prev.map((f) =>
+          f.id === item.id ? { ...f, status: "done", progress: 100, pathname: data.pathname } : f,
+        ),
+      )
+      toast.success(
+        compressed
+          ? `已压缩并上传：${original.name}（${formatBytes(original.size)} → ${formatBytes(toUpload.size)}）`
+          : `图片上传成功：${original.name}`,
+        { duration: 2000 },
+      )
       return data.pathname
-    } catch (e) {
-      setFiles((prev) => prev.map((f) => (f.id === item.id ? { ...f, status: "error", progress: 0 } : f)))
-      toast.error(`图片上传失败：${item.file.name}`)
+    } catch (e: any) {
+      setFiles((prev) =>
+        prev.map((f) => (f.id === item.id ? { ...f, status: "error", progress: 0 } : f)),
+      )
+      toast.error(`图片上传失败：${original.name}（${e?.message ?? "未知错误"}）`)
       return null
     }
   }
@@ -225,7 +268,7 @@ export function SubmitForm({ task, student, existingSubmission }: SubmitFormProp
           <div>
             <h2 className="font-semibold">上传作业照片</h2>
             <p className="text-xs text-muted-foreground mt-0.5">
-              支持拖动排序 · 最多 {MAX_FILES} 张 · 单张不超过 5MB
+              支持拖动排序 · 最多 {MAX_FILES} 张 · 大图会自动压缩
             </p>
           </div>
           <Badge variant="outline">{files.length} / {MAX_FILES}</Badge>
@@ -293,10 +336,12 @@ export function SubmitForm({ task, student, existingSubmission }: SubmitFormProp
                 </button>
 
                 {/* 状态覆盖层 */}
-                {f.status === "uploading" ? (
+                {f.status === "compressing" || f.status === "uploading" ? (
                   <div className="absolute inset-0 bg-foreground/40 flex flex-col items-center justify-center gap-1 text-background">
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    <span className="text-[10px]">上传中</span>
+                    <span className="text-[10px]">
+                      {f.status === "compressing" ? "压缩中…" : "上传中…"}
+                    </span>
                   </div>
                 ) : null}
                 {f.status === "done" ? (

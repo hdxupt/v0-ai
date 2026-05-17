@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getCurrentUser } from "@/lib/auth-server"
+import { getCurrentTeacher } from "@/lib/auth-server"
 import { createClient } from "@/lib/supabase/client"
 import { updateSubmissionGrading } from "@/lib/db"
 import { gradeSubmissionWithAI, pMapLimit } from "@/lib/ai/grade"
@@ -29,7 +29,7 @@ interface BatchResult {
  * - 返回每条结果状态（成功/失败 + 失败原因），方便前端展示失败列表
  */
 export async function POST(req: NextRequest) {
-  const user = await getCurrentUser()
+  const user = await getCurrentTeacher()
   if (!user || user.role !== "teacher") {
     return NextResponse.json({ error: "未登录" }, { status: 401 })
   }

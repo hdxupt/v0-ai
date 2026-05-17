@@ -38,6 +38,8 @@ export interface OcrPage {
   width: number
   /** 原图像素高 */
   height: number
+  /** 整图相对于水平方向的旋转角（腾讯云返回值，单位度，正负表示方向） */
+  angle?: number
   lines: OcrLine[]
 }
 
@@ -142,6 +144,14 @@ export async function ocrOnePage(
   })
 
   const detections = resp.TextDetections ?? []
+  // 腾讯云返回字段名历史上有过拼写差异（Angel / Angle），两个都兼容
+  const respAny = resp as any
+  const angle: number | undefined =
+    typeof respAny.Angel === "number"
+      ? respAny.Angel
+      : typeof respAny.Angle === "number"
+        ? respAny.Angle
+        : undefined
   let idx = baseLineIndex
   const lines: OcrLine[] = []
 
@@ -169,7 +179,7 @@ export async function ocrOnePage(
   }
 
   return {
-    page: { image_url: imageUrl, width: imgW, height: imgH, lines },
+    page: { image_url: imageUrl, width: imgW, height: imgH, angle, lines },
     nextBaseIndex: idx,
   }
 }

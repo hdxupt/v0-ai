@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server"
-import { getCurrentUser } from "@/lib/auth-server"
+import { getCurrentTeacher } from "@/lib/auth-server"
 import { softDeleteTask } from "@/lib/db"
 
 /**
@@ -11,7 +11,7 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const user = await getCurrentUser()
+  const user = await getCurrentTeacher()
   if (!user || user.role !== "teacher") {
     return NextResponse.json({ error: "未授权" }, { status: 401 })
   }

@@ -1,11 +1,11 @@
-import { getCurrentUser } from "@/lib/auth-server"
+import { getCurrentTeacher } from "@/lib/auth-server"
 import { getTask, listSubmissionsByTask, listStudentsByClass } from "@/lib/db"
 import { redirect, notFound } from "next/navigation"
 import { TaskProgress } from "@/components/dashboard/task-progress"
 
 export default async function TaskProgressPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const user = await getCurrentUser()
+  const user = await getCurrentTeacher()
   if (!user || user.role !== "teacher") redirect("/login")
 
   const task = await getTask(id)

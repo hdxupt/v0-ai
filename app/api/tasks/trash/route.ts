@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { getCurrentUser } from "@/lib/auth-server"
+import { getCurrentTeacher } from "@/lib/auth-server"
 import { listDeletedTasksByTeacher } from "@/lib/db"
 
 /**
@@ -7,7 +7,7 @@ import { listDeletedTasksByTeacher } from "@/lib/db"
  * 返回当前老师的回收站（已软删除的任务列表）。
  */
 export async function GET() {
-  const user = await getCurrentUser()
+  const user = await getCurrentTeacher()
   if (!user || user.role !== "teacher") {
     return NextResponse.json({ error: "未授权" }, { status: 401 })
   }

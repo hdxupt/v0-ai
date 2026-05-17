@@ -1,16 +1,14 @@
 import type React from "react"
-import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 import { AuthProvider } from "@/components/auth/auth-provider"
-import { AUTH_COOKIE_NAME, deserializeUser } from "@/lib/auth"
+import { getCurrentStudent } from "@/lib/auth-server"
 import { InstallPrompt } from "@/components/student/install-prompt"
 
 export default async function StudentLayout({ children }: { children: React.ReactNode }) {
-  const cookieStore = await cookies()
-  const user = deserializeUser(cookieStore.get(AUTH_COOKIE_NAME)?.value)
-  if (!user) redirect("/login")
+  const user = await getCurrentStudent()
+  if (!user) redirect("/login?redirect=/student&role=student")
   return (
-    <AuthProvider initialUser={user}>
+    <AuthProvider initialUser={user} role="student">
       {children}
       <InstallPrompt />
     </AuthProvider>

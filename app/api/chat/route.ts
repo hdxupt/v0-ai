@@ -1,5 +1,5 @@
 import { streamText, convertToModelMessages, type UIMessage } from "ai"
-import { getCurrentUser } from "@/lib/auth-server"
+import { getCurrentTeacher } from "@/lib/auth-server"
 import { createClient } from "@/lib/supabase/client"
 import { getGateway } from "@/lib/ai/gateway"
 import { AI_MODELS } from "@/lib/ai/config"
@@ -93,7 +93,7 @@ ${completionLines || "  · 暂无"}
 }
 
 export async function POST(req: Request) {
-  const user = await getCurrentUser()
+  const user = await getCurrentTeacher()
   if (!user || user.role !== "teacher") {
     return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401 })
   }

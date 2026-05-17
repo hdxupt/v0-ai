@@ -1,9 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getCurrentUser } from "@/lib/auth-server"
+import { getCurrentStudent } from "@/lib/auth-server"
 import { getActiveTask, createSubmission } from "@/lib/db"
 
 export async function POST(request: NextRequest) {
-  const user = await getCurrentUser()
+  const user = await getCurrentStudent()
   if (!user || user.role !== "student") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }

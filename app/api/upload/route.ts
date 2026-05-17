@@ -1,7 +1,6 @@
 import { put } from "@vercel/blob"
-import { cookies } from "next/headers"
 import { type NextRequest, NextResponse } from "next/server"
-import { AUTH_COOKIE_NAME, deserializeUser } from "@/lib/auth"
+import { getCurrentUser } from "@/lib/auth-server"
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]
 /**
@@ -12,8 +11,7 @@ const MAX_SIZE = 10 * 1024 * 1024
 
 export async function POST(request: NextRequest) {
   try {
-    const cookieStore = await cookies()
-    const user = deserializeUser(cookieStore.get(AUTH_COOKIE_NAME)?.value)
+    const user = await getCurrentUser()
     if (!user) {
       return NextResponse.json({ error: "未登录" }, { status: 401 })
     }

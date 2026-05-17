@@ -1,11 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { cookies } from "next/headers"
 import { get } from "@vercel/blob"
-import { AUTH_COOKIE_NAME, deserializeUser } from "@/lib/auth"
+import { getCurrentUser } from "@/lib/auth-server"
 
 export async function GET(request: NextRequest) {
-  const cookieStore = await cookies()
-  const user = deserializeUser(cookieStore.get(AUTH_COOKIE_NAME)?.value)
+  // 文件服务对老师 / 学生都开放（缩略图、原图渲染都要用）
+  const user = await getCurrentUser()
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }

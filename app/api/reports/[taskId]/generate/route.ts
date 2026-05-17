@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { generateObject } from "ai"
-import { getCurrentUser } from "@/lib/auth-server"
+import { getCurrentTeacher } from "@/lib/auth-server"
 import { createClient } from "@/lib/supabase/client"
 import {
   buildClassReportSystemPrompt,
@@ -21,7 +21,7 @@ export const maxDuration = 60
  * - 报告内容包含：整体诊断 + 分数分布 + 班级薄弱知识点 Top3 + 分层教学建议
  */
 export async function POST(_req: Request, ctx: { params: Promise<{ taskId: string }> }) {
-  const teacher = await getCurrentUser()
+  const teacher = await getCurrentTeacher()
   if (!teacher || teacher.role !== "teacher") {
     return NextResponse.json({ error: "未登录" }, { status: 401 })
   }

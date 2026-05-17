@@ -1,4 +1,4 @@
-import { getCurrentUser } from "@/lib/auth-server"
+import { getCurrentStudent } from "@/lib/auth-server"
 import { getSubmission, getTask } from "@/lib/db"
 import { redirect, notFound } from "next/navigation"
 import Link from "next/link"
@@ -9,7 +9,7 @@ import { formatDateTime } from "@/lib/format"
 
 export default async function SubmittedPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const user = await getCurrentUser()
+  const user = await getCurrentStudent()
   if (!user || user.role !== "student") redirect("/login")
 
   const submission = await getSubmission(id)

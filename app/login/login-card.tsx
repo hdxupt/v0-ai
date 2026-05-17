@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { GraduationCap, Sparkles, ArrowRight, Users, BookOpen, ShieldCheck } from "lucide-react"
-import { AUTH_COOKIE_NAME, AUTH_STORAGE_KEY, serializeUser } from "@/lib/auth"
+import { AUTH_STORAGE_KEY, cookieNameForRole, serializeUser } from "@/lib/auth"
 import type { AppUser } from "@/lib/types"
 
 export function LoginCard({
@@ -23,7 +23,7 @@ export function LoginCard({
   function handleLogin(user: AppUser) {
     setSigningIn(user.id)
     localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user))
-    document.cookie = `${AUTH_COOKIE_NAME}=${serializeUser(user)}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`
+    document.cookie = `${cookieNameForRole(user.role)}=${serializeUser(user)}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`
     const redirect = search.get("redirect")
     const target = redirect && redirect !== "/login" ? redirect : user.role === "teacher" ? "/dashboard" : "/student"
     // Use full reload to ensure middleware reads the new cookie and providers re-init
@@ -57,7 +57,7 @@ export function LoginCard({
           </div>
           <div className="hidden lg:flex items-center gap-2 text-xs text-muted-foreground pt-4 border-t border-border/60">
             <ShieldCheck className="w-3.5 h-3.5" />
-            <span>建议开两个浏览器窗口体验，左侧登录教师，右侧登录学生</span>
+            <span>支持同浏览器并存登录：先登老师再登学生，两端互不挤掉</span>
           </div>
         </div>
 

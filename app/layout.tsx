@@ -2,8 +2,6 @@ import type { Metadata, Viewport } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import { ThemeProvider } from "@/components/theme-provider"
-import { AuthProvider } from "@/components/auth/auth-provider"
-import { getCurrentUser } from "@/lib/auth-server"
 import { Toaster } from "sonner"
 import "./globals.css"
 
@@ -31,12 +29,16 @@ export const viewport: Viewport = {
   initialScale: 1,
 }
 
+/**
+ * 全局根布局：不再注入 AuthProvider。
+ * 老师端 (`app/dashboard/layout.tsx`) 与学生端 (`app/student/layout.tsx`)
+ * 各自注入自己角色对应的 user，从而支持同浏览器并存登录。
+ */
 export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  const initialUser = await getCurrentUser()
   return (
     <html
       lang="zh-CN"
@@ -45,7 +47,7 @@ export default async function RootLayout({
     >
       <body className="font-sans antialiased">
         <ThemeProvider>
-          <AuthProvider initialUser={initialUser}>{children}</AuthProvider>
+          {children}
           <Toaster
             position="top-center"
             richColors

@@ -4,7 +4,7 @@ import { ChevronLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { GradingWorkspace } from "@/components/grading/grading-workspace"
-import { getCurrentUser } from "@/lib/auth-server"
+import { getCurrentTeacher } from "@/lib/auth-server"
 import { getSubmission, getTask, getUser } from "@/lib/db"
 
 export const dynamic = "force-dynamic"
@@ -15,7 +15,7 @@ export default async function GradingPage({
   params: Promise<{ submissionId: string }>
 }) {
   const { submissionId } = await params
-  const teacher = await getCurrentUser()
+  const teacher = await getCurrentTeacher()
   if (!teacher || teacher.role !== "teacher") redirect("/login")
 
   const submission = await getSubmission(submissionId)

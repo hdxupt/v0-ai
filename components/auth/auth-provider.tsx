@@ -1,40 +1,67 @@
 "use client"
 
 import { createContext, useContext, useState, useCallback } from "react"
-import { AUTH_COOKIE_NAME, AUTH_STORAGE_KEY, serializeUser } from "@/lib/auth"
+import {
+  TEACHER_COOKIE_NAME,
+  STUDENT_COOKIE_NAME,
+  AUTH_STORAGE_KEY,
+  cookieNameForRole,
+  serializeUser,
+  type Role,
+} from "@/lib/auth"
 import type { AppUser } from "@/lib/types"
 
 interface AuthContextValue {
   user: AppUser | null
+  /** 上下文角色：当前页面（dashboard / student）的角色锁定，影响 logout 清哪一个 cookie */
+  role: Role
   loading: boolean
+  /** 写入指定角色的 cookie + localStorage */
   login: (user: AppUser) => void
+  /** 仅清除当前角色的 cookie；另一端的会话保留 */
   logout: () => void
+  /** 切换账号：清空当前角色 cookie 后跳到 /login?switch=1&role=... */
+  switchAccount: () => void
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
+const COOKIE_MAX_AGE = 60 * 60 * 24 * 30 // 30 天
+
+function writeCookie(name: string, value: string) {
+  document.cookie = `${name}=${value}; path=/; max-age=${COOKIE_MAX_AGE}; SameSite=Lax`
+}
+function clearCookie(name: string) {
+  document.cookie = `${name}=; path=/; max-age=0; SameSite=Lax`
+  document.cookie = `${name}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`
+}
+
 export function AuthProvider({
   initialUser,
+  role,
   children,
 }: {
   initialUser: AppUser | null
+  /**
+   * 当前页面所属的角色作用域：
+   * - dashboard layout 传 "teacher"
+   * - student layout 传 "student"
+   * - 旧调用未传时，保守按 initialUser.role 推导，再退化为 "teacher"
+   */
+  role?: Role
   children: React.ReactNode
 }) {
+  const resolvedRole: Role = role ?? initialUser?.role ?? "teacher"
   const [user, setUser] = useState<AppUser | null>(initialUser)
-  const [loading, setLoading] = useState(false)
-
-  // 注意：故意不监听 storage 事件——演示时常常需要在两个 tab 同时打开
-  // 学生端和教师端，监听 storage 会导致 tab A 登录后 tab B 也跟着切换。
-  // Cookie 仍然是共享的，所以同一浏览器同一时刻只有一个真实身份，
-  // 演示时建议另一端使用无痕窗口或不同浏览器。
+  const [loading] = useState(false)
 
   const login = useCallback(
     (u: AppUser) => {
       setUser(u)
       if (typeof window !== "undefined") {
         localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(u))
-        // Set cookie for SSR — 30 days, not httpOnly so client can clear it
-        document.cookie = `${AUTH_COOKIE_NAME}=${serializeUser(u)}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`
+        // 写到该用户真实 role 对应的 cookie，而不是当前页面 role
+        writeCookie(cookieNameForRole(u.role), serializeUser(u))
       }
     },
     [],
@@ -44,17 +71,23 @@ export function AuthProvider({
     setUser(null)
     if (typeof window !== "undefined") {
       localStorage.removeItem(AUTH_STORAGE_KEY)
-      // Clear cookie with both default path and explicit settings to be safe
-      document.cookie = `${AUTH_COOKIE_NAME}=; path=/; max-age=0; SameSite=Lax`
-      document.cookie = `${AUTH_COOKIE_NAME}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`
-      // Full reload guarantees middleware re-evaluates, RSC cache flushed
-      // and any leftover Supabase Realtime channels are torn down.
+      // 仅清当前 scope 的 cookie，另一端会话保留
+      clearCookie(cookieNameForRole(resolvedRole))
+      // 兼容老单 cookie，一并清掉
+      clearCookie("sewise_session_user")
       window.location.href = "/login"
     }
-  }, [])
+  }, [resolvedRole])
+
+  const switchAccount = useCallback(() => {
+    if (typeof window !== "undefined") {
+      clearCookie(cookieNameForRole(resolvedRole))
+      window.location.href = `/login?switch=1&role=${resolvedRole}`
+    }
+  }, [resolvedRole])
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, role: resolvedRole, loading, login, logout, switchAccount }}>
       {children}
     </AuthContext.Provider>
   )
@@ -65,3 +98,6 @@ export function useAuth() {
   if (!ctx) throw new Error("useAuth must be used inside AuthProvider")
   return ctx
 }
+
+// 让别处 import 的常量可继续从这里取（保持兼容）
+export { TEACHER_COOKIE_NAME, STUDENT_COOKIE_NAME }

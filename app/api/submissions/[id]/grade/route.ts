@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { getCurrentUser } from "@/lib/auth-server"
+import { getCurrentTeacher } from "@/lib/auth-server"
 import { getSubmission, getTask, updateSubmissionGrading } from "@/lib/db"
 import { gradeSubmissionWithAI } from "@/lib/ai/grade"
 
@@ -14,7 +14,7 @@ export const maxDuration = 120
  *   2. { score, ai_comment, ... }         → 手动编辑（保留之前的 AI 结果或人工覆盖）
  */
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const teacher = await getCurrentUser()
+  const teacher = await getCurrentTeacher()
   if (!teacher || teacher.role !== "teacher") {
     return NextResponse.json({ error: "未登录" }, { status: 401 })
   }

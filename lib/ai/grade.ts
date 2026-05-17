@@ -303,10 +303,10 @@ function resolveCorrectionBboxes(
     }
 
     // ---- 备选：fallback bounding_box ----
-    if (!bbox && d.bounding_box) {
-      const [, , hh, w] = d.bounding_box
+    if (!bbox && d.bounding_box && d.bounding_box.length === 4) {
+      const [yy, xx, hh, w] = d.bounding_box
       if (hh > 0 && w > 0 && w <= MAX_W && hh <= MAX_H) {
-        bbox = d.bounding_box
+        bbox = [yy, xx, hh, w] as [number, number, number, number]
         if (pageIndex === undefined) pageIndex = 0
       }
     }

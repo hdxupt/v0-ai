@@ -8,7 +8,7 @@ import {
 } from "./prompts"
 import { GradingResultSchema, type GradingResult } from "./schemas"
 import { AI_MODELS, GRADING_TIMEOUT_MS, GRADING_MAX_OUTPUT_TOKENS } from "./config"
-import { getGateway } from "./gateway"
+import { resolveModel } from "./gateway"
 import {
   ocrSubmission,
   buildTranscriptForLLM,
@@ -177,11 +177,11 @@ export async function gradeSubmissionWithAI(
   const timer = setTimeout(() => controller.abort(), GRADING_TIMEOUT_MS)
 
   try {
-    const gateway = getGateway()
+    const gradingModel = resolveModel(AI_MODELS.grading)
     let object: GradingResult
     try {
       const result = await generateObject({
-        model: gateway(AI_MODELS.grading),
+        model: gradingModel,
         schema: GradingResultSchema,
         maxOutputTokens: GRADING_MAX_OUTPUT_TOKENS,
         system,

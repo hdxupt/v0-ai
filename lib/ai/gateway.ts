@@ -1,4 +1,6 @@
 import { createGateway } from "@ai-sdk/gateway"
+import { createAnthropic } from "@ai-sdk/anthropic"
+import type { LanguageModel } from "ai"
 
 /**
  * 解析可用的 AI Gateway API key。
@@ -37,16 +39,70 @@ function resolveGatewayApiKey(): string {
   )
 }
 
-/**
- * 共享的 Gateway 客户端实例。
- *
- * 注意：这里**故意做成 lazy** —— 只有在第一次真正调用 AI 时才解析 key，
- * 这样模块加载阶段就算 env 缺失也不会让整个服务起不来。
- */
-let _cached: ReturnType<typeof createGateway> | null = null
-export function getGateway() {
-  if (_cached) return _cached
+/* ----------------------------- 客户端缓存 ----------------------------- */
+
+let _gateway: ReturnType<typeof createGateway> | null = null
+let _anthropic: ReturnType<typeof createAnthropic> | null = null
+
+function getGatewayClient() {
+  if (_gateway) return _gateway
   const apiKey = resolveGatewayApiKey()
-  _cached = createGateway({ apiKey })
-  return _cached
+  _gateway = createGateway({ apiKey })
+  return _gateway
 }
+
+function getAnthropicClient() {
+  if (_anthropic) return _anthropic
+  const apiKey = process.env.ANTHROPIC_API_KEY?.trim()
+  if (!apiKey) {
+    throw new Error(
+      "未配置 ANTHROPIC_API_KEY。请到项目 Vars 中添加 `sk-ant-` 开头的 Anthropic API Key。",
+    )
+  }
+  _anthropic = createAnthropic({ apiKey })
+  return _anthropic
+}
+
+/**
+ * 把 `"anthropic/claude-opus-4.7"` 形式的 Gateway 模型 id
+ * 转成 Anthropic 直连接受的模型 id（`claude-opus-4-7`）。
+ *
+ * 直连 API 用 `-` 分隔版本号，不接受 Gateway 那种 `4.7` 的写法。
+ */
+function toAnthropicDirectModelId(gatewayId: string): string {
+  // 去掉 "anthropic/" 前缀
+  const base = gatewayId.replace(/^anthropic\//, "")
+  // "claude-opus-4.7" → "claude-opus-4-7"
+  return base.replace(/(\d+)\.(\d+)/g, "$1-$2")
+}
+
+/* ----------------------------- 对外 API ----------------------------- */
+
+/**
+ * 老接口保留给少数已经显式调用 `getGateway()` 的代码：
+ *   const gateway = getGateway(); const model = gateway("openai/gpt-5-mini")
+ *
+ * 新代码请直接用 `resolveModel(modelId)`，它会自动选择直连还是走 Gateway。
+ */
+export function getGateway() {
+  return getGatewayClient()
+}
+
+/**
+ * 统一的模型解析入口。
+ *
+ * 路由策略：
+ *   1. 若 modelId 以 `anthropic/` 开头**并且**配置了 `ANTHROPIC_API_KEY`，
+ *      走 Anthropic 官方 API 直连（绕开 AI Gateway free credits 限制）。
+ *   2. 否则一律走 AI Gateway（其它 provider，或者用户没设直连 key 的兜底）。
+ *
+ * 这是项目里所有 streamText / generateObject 调用都应该走的入口。
+ */
+export function resolveModel(modelId: string): LanguageModel {
+  if (modelId.startsWith("anthropic/") && process.env.ANTHROPIC_API_KEY) {
+    const directId = toAnthropicDirectModelId(modelId)
+    return getAnthropicClient()(directId)
+  }
+  return getGatewayClient()(modelId)
+}
+

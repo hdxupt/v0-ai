@@ -9,7 +9,7 @@ import {
 } from "@/lib/ai/prompts"
 import { ClassReportSchema } from "@/lib/ai/schemas"
 import { AI_MODELS } from "@/lib/ai/config"
-import { getGateway } from "@/lib/ai/gateway"
+import { resolveModel } from "@/lib/ai/gateway"
 
 export const maxDuration = 60
 
@@ -79,9 +79,8 @@ export async function POST(_req: Request, ctx: { params: Promise<{ taskId: strin
   const subject = resolveSubject(task.subject)
 
   try {
-    const gateway = getGateway()
     const { object } = await generateObject({
-      model: gateway(AI_MODELS.classReport),
+      model: resolveModel(AI_MODELS.classReport),
       schema: ClassReportSchema,
       system: buildClassReportSystemPrompt(),
       prompt: buildClassReportUserPrompt({

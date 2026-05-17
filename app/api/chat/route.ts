@@ -1,7 +1,7 @@
 import { streamText, convertToModelMessages, type UIMessage } from "ai"
 import { getCurrentTeacher } from "@/lib/auth-server"
 import { createClient } from "@/lib/supabase/client"
-import { getGateway } from "@/lib/ai/gateway"
+import { resolveModel } from "@/lib/ai/gateway"
 import { AI_MODELS } from "@/lib/ai/config"
 
 export const maxDuration = 30
@@ -219,9 +219,8 @@ ${snapshot}
 教师姓名：${user.name}
 当前时间：${new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })}`
 
-  const gateway = getGateway()
   const result = streamText({
-    model: gateway(AI_MODELS.chat),
+    model: resolveModel(AI_MODELS.chat),
     system,
     messages: await convertToModelMessages(messages),
   })

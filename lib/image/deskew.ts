@@ -84,3 +84,23 @@ export async function rotateImageBlob(
     return null
   }
 }
+
+/**
+ * 批量纠偏：每张图按对应角度独立处理。
+ * 角度低于阈值的图不旋转，但为了保持下标对齐，仍然返回原 pathname。
+ * 任何一张失败就返回原图（保证下标长度始终等于输入）。
+ */
+export async function autoDeskewSubmissionImages(
+  pathnames: string[],
+  angles: number[],
+): Promise<string[]> {
+  const out = await Promise.all(
+    pathnames.map(async (p, i) => {
+      const a = angles[i] ?? 0
+      if (Math.abs(a) < SKEW_THRESHOLD_DEG) return p
+      const rotated = await rotateImageBlob(p, a)
+      return rotated ?? p
+    }),
+  )
+  return out
+}

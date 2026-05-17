@@ -1,14 +1,21 @@
 "use client"
 
-import { useState } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { Suspense, useState } from "react"
+import { useSearchParams } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { GraduationCap, Sparkles, ArrowRight, Users, BookOpen, ShieldCheck } from "lucide-react"
+import { GraduationCap, Sparkles, ArrowRight, Users, BookOpen, ShieldCheck, Loader2 } from "lucide-react"
 import { AUTH_STORAGE_KEY, cookieNameForRole, serializeUser } from "@/lib/auth"
 import type { AppUser } from "@/lib/types"
 
+/**
+ * 公开页面入口。
+ *
+ * Next.js 16 在 Turbopack 下要求 `useSearchParams()` 必须被包在 Suspense 内，
+ * 否则当查询字符串可见时整页会回退到 CSR、且在某些路由会让交互看起来"点了没反应"。
+ * 所以把读 search 的部分单独抽到 LoginCardInner，外层用 Suspense 包一层。
+ */
 export function LoginCard({
   teachers,
   students,
@@ -16,18 +23,52 @@ export function LoginCard({
   teachers: AppUser[]
   students: AppUser[]
 }) {
-  const router = useRouter()
+  return (
+    <Suspense fallback={<LoginShell />}>
+      <LoginCardInner teachers={teachers} students={students} />
+    </Suspense>
+  )
+}
+
+function LoginShell() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 flex items-center justify-center p-6">
+      <div className="text-sm text-muted-foreground flex items-center gap-2">
+        <Loader2 className="w-4 h-4 animate-spin" />
+        正在加载登录页…
+      </div>
+    </div>
+  )
+}
+
+function LoginCardInner({
+  teachers,
+  students,
+}: {
+  teachers: AppUser[]
+  students: AppUser[]
+}) {
   const search = useSearchParams()
   const [signingIn, setSigningIn] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   function handleLogin(user: AppUser) {
+    if (signingIn) return
+    setError(null)
     setSigningIn(user.id)
-    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user))
-    document.cookie = `${cookieNameForRole(user.role)}=${serializeUser(user)}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`
-    const redirect = search.get("redirect")
-    const target = redirect && redirect !== "/login" ? redirect : user.role === "teacher" ? "/dashboard" : "/student"
-    // Use full reload to ensure middleware reads the new cookie and providers re-init
-    window.location.href = target
+    try {
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user))
+      document.cookie = `${cookieNameForRole(user.role)}=${serializeUser(user)}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`
+      const redirect = search.get("redirect")
+      const target =
+        redirect && redirect !== "/login" ? redirect : user.role === "teacher" ? "/dashboard" : "/student"
+      // 用整页跳转：让 middleware 重新读 cookie，AuthProvider 也重新初始化
+      window.location.href = target
+    } catch (e: any) {
+      console.error("[v0] login failed:", e)
+      setError(e?.message ?? "登录失败，请刷新页面后重试")
+      setSigningIn(null)
+    }
   }
 
   return (
@@ -108,6 +149,12 @@ export function LoginCard({
             提示：测试账号为预设演示数据，登录后所做的所有操作（如布置作业、提交、批阅）会在 Supabase 数据库中真实保存，
             可供另一端实时接收。
           </p>
+
+          {error ? (
+            <div className="mt-3 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+              {error}
+            </div>
+          ) : null}
         </Card>
       </div>
     </div>

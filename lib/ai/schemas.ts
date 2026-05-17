@@ -1,7 +1,8 @@
 import { z } from "zod"
 
 /**
- * 兼容 LLM 偶尔把数组序列化成字符串的情形（Claude Sonnet 在 AI Gateway 上输出长 JSON 时偶发）。
+ * 兼容 LLM 偶尔把数组/对象序列化成字符串的情形（Claude 在输出长 JSON 时偶发，
+ * 尤其是 Opus 4.7 在 max_output_tokens 较高时也观察到该现象）。
  * 把 `[ {...}, {...} ]` 这种字符串自动解析为真实数组；其它情况原样返回。
  */
 function parseMaybeJsonString<T>(val: unknown): unknown {

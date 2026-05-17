@@ -15,6 +15,7 @@ import {
   findLineByIndex,
   type OcrData,
 } from "@/lib/ocr/tencent"
+import { autoDeskewSubmissionImages } from "@/lib/image/deskew"
 
 /**
  * 从私有 Blob 拉取图片字节，转成 AI SDK 6 可以直接喂的 data URL。
@@ -69,6 +70,12 @@ export interface AIGradePayload {
    * 当 OCR 服务调用失败时为 null（仍能跑通批改，只是 bbox 退化到 VLM fallback）。
    */
   ocr_data: OcrData | null
+  /**
+   * 若发生了纠偏（|检测角| > 阈值），返回旋转回正后的新图 Blob 路径。
+   * 调用方应将其写回 submissions.image_urls，让前端展示与 bbox 完全对齐。
+   * 没纠偏则为 null。
+   */
+  rotated_image_urls: string[] | null
 }
 
 /**
@@ -88,19 +95,54 @@ export async function gradeSubmissionWithAI(
   },
 ): Promise<AIGradePayload> {
   const subject = resolveSubject(task.subject)
-  const imageUrls = (submission.image_urls ?? []).slice(0, 9)
+  let imageUrls = (submission.image_urls ?? []).slice(0, 9)
   if (imageUrls.length === 0) {
     throw new Error("学生未上传任何作业图片，无法批改")
   }
 
   /* ----------------- 阶段 1：OCR 转录（或复用缓存） ----------------- */
   let ocrData: OcrData | null = options?.cachedOcrData ?? null
+  let rotatedImageUrls: string[] | null = null
+
   if (!ocrData) {
     try {
       console.log("[v0] grade: running OCR on", imageUrls.length, "image(s)")
       ocrData = await ocrSubmission(imageUrls)
       const totalLines = ocrData.pages.reduce((s, p) => s + p.lines.length, 0)
-      console.log("[v0] grade: OCR done, total lines =", totalLines)
+      const maxAbsAngle = Math.max(
+        ...ocrData.pages.map((p) => Math.abs(p.angle ?? 0)),
+        0,
+      )
+      console.log(
+        "[v0] grade: OCR done, total lines =",
+        totalLines,
+        "max |angle| =",
+        maxAbsAngle.toFixed(2),
+      )
+
+      /* ---------- 自动纠偏：|角度| > 2° 时旋转回正再重新 OCR ---------- */
+      if (maxAbsAngle > 2) {
+        try {
+          console.log("[v0] grade: image is skewed, running deskew pipeline")
+          const deskewed = await autoDeskewSubmissionImages(
+            imageUrls,
+            ocrData.pages.map((p) => p.angle ?? 0),
+          )
+          if (deskewed.length === imageUrls.length) {
+            rotatedImageUrls = deskewed
+            imageUrls = deskewed
+            console.log("[v0] grade: re-running OCR on deskewed images")
+            ocrData = await ocrSubmission(imageUrls)
+            const totalLines2 = ocrData.pages.reduce((s, p) => s + p.lines.length, 0)
+            console.log("[v0] grade: post-deskew OCR done, lines =", totalLines2)
+          }
+        } catch (e: any) {
+          console.error(
+            "[v0] grade: deskew failed, continuing with original tilted image:",
+            e?.message,
+          )
+        }
+      }
     } catch (e: any) {
       console.error("[v0] grade: OCR failed, falling back to VLM-only:", e?.message)
       ocrData = null
@@ -198,6 +240,7 @@ export async function gradeSubmissionWithAI(
         radar_analysis: object.radar_analysis,
       },
       ocr_data: ocrData,
+      rotated_image_urls: rotatedImageUrls,
     }
   } finally {
     clearTimeout(timer)

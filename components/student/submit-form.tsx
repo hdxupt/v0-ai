@@ -5,13 +5,13 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
 import { toast } from "sonner"
-import { ArrowLeft, Upload, X, Camera, CheckCircle2, Loader2, GripVertical, Clock, BookOpen } from "lucide-react"
+import { ArrowLeft, Upload, X, Camera, CheckCircle2, Loader2, GripVertical, Clock, BookOpen, RotateCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { formatDueDate } from "@/lib/format"
 import type { AppUser, Task, Submission } from "@/lib/types"
-import { compressImageForUpload, formatBytes } from "@/lib/image/compress"
+import { compressImageForUpload, formatBytes, rotateImageFile } from "@/lib/image/compress"
 
 interface SubmitFormProps {
   task: Task
@@ -28,6 +28,8 @@ interface UploadingFile {
   progress: number
   /** 压缩前原始大小，用于 UI 显示"压缩比" */
   originalSize?: number
+  /** 旋转中标记，UI 给个 loading 反馈 */
+  rotating?: boolean
 }
 
 const MAX_FILES = 9
@@ -89,6 +91,45 @@ export function SubmitForm({ task, student, existingSubmission }: SubmitFormProp
       if (target) URL.revokeObjectURL(target.previewUrl)
       return prev.filter((f) => f.id !== id)
     })
+  }
+
+  /**
+   * 用户点击旋转按钮：本地用 canvas 把图顺时针 90° 旋转。
+   * 注意：旋转后的文件已经是新 File 实例，必须更新 previewUrl，
+   * 同时把 status 复位到 pending（如果之前已上传，则 pathname 失效，需要重新上传）。
+   */
+  async function rotateFile(id: string) {
+    const target = files.find((f) => f.id === id)
+    if (!target || target.rotating) return
+
+    setFiles((prev) =>
+      prev.map((f) => (f.id === id ? { ...f, rotating: true } : f)),
+    )
+    try {
+      const rotated = await rotateImageFile(target.file, 90)
+      const newPreview = URL.createObjectURL(rotated)
+      setFiles((prev) =>
+        prev.map((f) => {
+          if (f.id !== id) return f
+          URL.revokeObjectURL(f.previewUrl)
+          return {
+            ...f,
+            file: rotated,
+            previewUrl: newPreview,
+            status: "pending",
+            progress: 0,
+            pathname: undefined,
+            rotating: false,
+            originalSize: rotated.size,
+          }
+        }),
+      )
+    } catch (e) {
+      setFiles((prev) =>
+        prev.map((f) => (f.id === id ? { ...f, rotating: false } : f)),
+      )
+      toast.error("图片旋转失败，请重试")
+    }
   }
 
   function onDragStart(idx: number) {
@@ -268,7 +309,7 @@ export function SubmitForm({ task, student, existingSubmission }: SubmitFormProp
           <div>
             <h2 className="font-semibold">上传作业照片</h2>
             <p className="text-xs text-muted-foreground mt-0.5">
-              支持拖动排序 · 最多 {MAX_FILES} 张 · 大图会自动压缩
+              支持拖动排序 · 单张可点旋转纠正方向 · AI 批改时还会自动校正
             </p>
           </div>
           <Badge variant="outline">{files.length} / {MAX_FILES}</Badge>
@@ -316,6 +357,21 @@ export function SubmitForm({ task, student, existingSubmission }: SubmitFormProp
                 <div className="absolute top-1.5 left-1.5 w-6 h-6 rounded-full bg-foreground/80 text-background text-xs font-medium flex items-center justify-center">
                   {idx + 1}
                 </div>
+
+                {/* 旋转按钮：每点一次顺时针 90° */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    rotateFile(f.id)
+                  }}
+                  disabled={f.rotating || f.status === "uploading" || f.status === "compressing"}
+                  className="absolute bottom-1.5 right-1.5 w-7 h-7 rounded-full bg-foreground/80 text-background flex items-center justify-center hover:bg-foreground transition-colors disabled:opacity-50"
+                  aria-label="顺时针旋转 90°"
+                  title="顺时针旋转 90°"
+                >
+                  {f.rotating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCw className="w-3.5 h-3.5" />}
+                </button>
 
                 {/* 拖拽手柄 */}
                 <div className="absolute top-1.5 right-7 w-6 h-6 rounded-full bg-foreground/80 text-background flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-grab">

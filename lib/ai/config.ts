@@ -7,32 +7,29 @@
  */
 export const AI_MODELS = {
   /**
-   * 单卷批改模型。
+   * 单卷批改模型：Anthropic Claude Opus 4.7。
    *
-   * 视觉最强是 opus 4.6，但 Vercel AI Gateway 当前对 free credits 限制了 opus 系列，
-   * 调用会返回 403 RestrictedModelsError。一旦团队充值了 paid credits
-   * (vercel.com/[team]/~/ai)，把下面这行改成
-   *   "anthropic/claude-opus-4.6"
-   * 即可获得更精准的 bbox 视觉定位。
-   *
-   * 当前回退到 sonnet 4.5：free credits 可用，bbox 像素精度受限但语义批改一致。
+   * 选择理由：手写中文 / 数学符号 / 几何图形批阅极重视觉精度，
+   * Opus 系列是 Anthropic 当前在视觉理解 + 长 JSON 结构化输出上最稳的模型。
+   * 走 AI Gateway 默认 provider，无需额外 API key。若 Gateway 暂不可用，
+   * 可在 .env 设置 ANTHROPIC_API_KEY 并改用 createAnthropic 直连。
    */
-  grading: "anthropic/claude-sonnet-4.5",
-  /** 班级学情报告：暂同 grading；有 paid credits 后可单独升 opus */
+  grading: "anthropic/claude-opus-4.7",
+  /** 班级学情报告：用 sonnet 4.5 控制成本，质量足够 */
   classReport: "anthropic/claude-sonnet-4.5",
   /** 教师 AI 助教：轻量问答，gpt-5-mini 即可 */
   chat: "openai/gpt-5-mini",
 } as const
 
 /** 批改并发上限（同一份作业批量批阅时） */
-export const GRADING_CONCURRENCY = 5
+export const GRADING_CONCURRENCY = 3
 
-/** 单次批改最长时间。opus 比 sonnet 慢，给到 150s 缓冲。 */
-export const GRADING_TIMEOUT_MS = 150_000
+/** 单次批改最长时间。opus 比 sonnet 慢，给到 180s 缓冲。 */
+export const GRADING_TIMEOUT_MS = 180_000
 
 /**
  * 批改时的最大输出 token。
- * opus 4.6 对带有"原文片段引用 + 多维度 radar + 大段 teacher_comment"的批改任务通常稳定在 4~6k，
+ * opus 4.7 对带有"原文片段引用 + 多维度 radar + 大段 teacher_comment"的批改任务通常稳定在 4~6k，
  * 给到 8k 上限保证不被截断。
  */
 export const GRADING_MAX_OUTPUT_TOKENS = 8000

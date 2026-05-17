@@ -227,7 +227,7 @@ export function GradingControlPanel({
             <div className="flex-1">
               <div className="text-sm font-medium">AI 批阅控制台</div>
               <div className="text-[11px] text-muted-foreground">
-                Claude Sonnet 4.5 · Visual Grounding · 学科自适应
+                Claude Opus 4.7 · Visual Grounding · 学科自适应
               </div>
             </div>
           </div>

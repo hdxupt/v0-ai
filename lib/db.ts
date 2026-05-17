@@ -303,6 +303,8 @@ export async function updateSubmissionGrading(
     teacher_name: string
     /** 可选：OCR 缓存。提供则一并写入 submissions.ocr_data 字段。 */
     ocr_data?: any
+    /** 可选：批改时若发生了图片纠偏（旋转回正），传入新的 image_urls 覆盖原图。 */
+    image_urls?: string[]
   },
 ): Promise<Submission> {
   const update: Record<string, unknown> = {
@@ -316,6 +318,9 @@ export async function updateSubmissionGrading(
   }
   if (payload.ocr_data !== undefined) {
     update.ocr_data = payload.ocr_data
+  }
+  if (payload.image_urls !== undefined) {
+    update.image_urls = payload.image_urls
   }
 
   const { data, error } = await supabase()

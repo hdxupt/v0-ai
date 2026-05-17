@@ -108,3 +108,38 @@ export function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
+
+/**
+ * 客户端旋转图片：仅支持 90/180/270 这三种"正交角"，覆盖 99% 的"拍歪了"场景。
+ * 返回新的 File，原文件不变。失败回退原文件。
+ */
+export async function rotateImageFile(file: File, degrees: 90 | 180 | 270): Promise<File> {
+  try {
+    const bitmap = await createImageBitmap(file)
+    const swap = degrees === 90 || degrees === 270
+    const targetW = swap ? bitmap.height : bitmap.width
+    const targetH = swap ? bitmap.width : bitmap.height
+    const canvas =
+      typeof OffscreenCanvas !== "undefined"
+        ? new OffscreenCanvas(targetW, targetH)
+        : Object.assign(document.createElement("canvas"), { width: targetW, height: targetH })
+    const ctx = (canvas as any).getContext("2d") as CanvasRenderingContext2D | null
+    if (!ctx) {
+      bitmap.close?.()
+      return file
+    }
+    ctx.translate(targetW / 2, targetH / 2)
+    ctx.rotate((degrees * Math.PI) / 180)
+    ctx.drawImage(bitmap, -bitmap.width / 2, -bitmap.height / 2)
+    bitmap.close?.()
+
+    // 用 jpeg 输出（保留压缩友好性，避免大尺寸 png 把后续压缩算量拉爆）
+    const blob = await canvasToBlob(canvas as any, "image/jpeg", 0.92)
+    if (!blob) return file
+    const baseName = file.name.replace(/\.(heic|heif|png|jpe?g|webp)$/i, "")
+    return new File([blob], baseName + ".jpg", { type: "image/jpeg", lastModified: Date.now() })
+  } catch (e) {
+    console.warn("[v0] rotateImageFile failed:", e)
+    return file
+  }
+}

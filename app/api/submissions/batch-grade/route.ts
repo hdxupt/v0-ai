@@ -76,6 +76,7 @@ export async function POST(req: NextRequest) {
         class_id: sub.class_id,
         teacher_name: user.name,
         ocr_data: payload.ocr_data,
+        image_urls: payload.rotated_image_urls ?? undefined,
       })
       return {
         id: sub.id,

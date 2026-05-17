@@ -47,6 +47,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         class_id: submission.class_id,
         teacher_name: teacher.name,
         ocr_data: payload.ocr_data,
+        // 若做了纠偏，把回正后的图覆盖回 submission，前端展示和 bbox 完全对齐
+        image_urls: payload.rotated_image_urls ?? undefined,
       })
       return NextResponse.json({ submission: updated })
     } catch (err: any) {

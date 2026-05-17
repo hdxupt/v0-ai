@@ -126,48 +126,56 @@ export function NotificationBell() {
             </Button>
           )}
         </div>
-        <ScrollArea className="max-h-[420px]">
-          {items.length === 0 ? (
-            <div className="py-12 text-center text-xs text-muted-foreground">
-              暂无通知
-            </div>
-          ) : (
-            <ul className="divide-y divide-border">
-              {items.map((n) => {
-                const Icon = ICONS[n.type] ?? Bell
-                const iconClass = COLOR_BY_TYPE[n.type] ?? "text-muted-foreground bg-muted"
-                const href = computeHref(user!.role, n)
-                return (
-                  <li key={n.id}>
-                    <Link
-                      href={href}
-                      onClick={() => handleClick(n)}
-                      className={`flex gap-3 px-4 py-3 hover:bg-muted/50 transition-colors ${!n.read ? "bg-primary/[0.03]" : ""}`}
-                    >
-                      <div className={`w-8 h-8 rounded-md flex items-center justify-center shrink-0 ${iconClass}`}>
-                        <Icon className="w-4 h-4" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start gap-2">
-                          <p className="text-xs font-medium leading-tight flex-1">{n.title}</p>
-                          {!n.read && (
-                            <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1 shrink-0" />
-                          )}
+        <div className="relative">
+          {items.length > 4 ? (
+            <>
+              <div className="pointer-events-none absolute inset-x-0 top-0 h-4 bg-gradient-to-b from-popover to-transparent z-10" />
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 h-4 bg-gradient-to-t from-popover to-transparent z-10" />
+            </>
+          ) : null}
+          <ScrollArea className="h-[420px]">
+            {items.length === 0 ? (
+              <div className="py-12 text-center text-xs text-muted-foreground">
+                暂无通知
+              </div>
+            ) : (
+              <ul className="divide-y divide-border">
+                {items.map((n) => {
+                  const Icon = ICONS[n.type] ?? Bell
+                  const iconClass = COLOR_BY_TYPE[n.type] ?? "text-muted-foreground bg-muted"
+                  const href = computeHref(user!.role, n)
+                  return (
+                    <li key={n.id}>
+                      <Link
+                        href={href}
+                        onClick={() => handleClick(n)}
+                        className={`flex gap-3 px-4 py-3 hover:bg-muted/50 transition-colors ${!n.read ? "bg-primary/[0.03]" : ""}`}
+                      >
+                        <div className={`w-8 h-8 rounded-md flex items-center justify-center shrink-0 ${iconClass}`}>
+                          <Icon className="w-4 h-4" />
                         </div>
-                        <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed line-clamp-2">
-                          {n.content}
-                        </p>
-                        <p className="text-[10px] text-muted-foreground mt-1">
-                          {formatRelativeTime(n.created_at)}
-                        </p>
-                      </div>
-                    </Link>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-        </ScrollArea>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start gap-2">
+                            <p className="text-xs font-medium leading-tight flex-1">{n.title}</p>
+                            {!n.read && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1 shrink-0" />
+                            )}
+                          </div>
+                          <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed line-clamp-2">
+                            {n.content}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground mt-1">
+                            {formatRelativeTime(n.created_at)}
+                          </p>
+                        </div>
+                      </Link>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </ScrollArea>
+        </div>
       </PopoverContent>
     </Popover>
   )

@@ -55,27 +55,32 @@ export function ActivityFeed({
     )
   }
   return (
-    <ScrollArea className="max-h-[460px]">
-      <ol className="relative pl-3">
-        <span className="absolute left-[7px] top-2 bottom-2 w-px bg-border" aria-hidden />
-        {events.map((e) => {
-          const Icon = ICONS[e.type] ?? ActivityIcon
-          const tone = TONE[e.type] ?? "bg-muted text-muted-foreground"
-          return (
-            <li key={e.id} className="relative pl-5 pb-4 last:pb-1">
-              <span
-                className={`absolute -left-[3px] top-0.5 w-3.5 h-3.5 rounded-full flex items-center justify-center ring-2 ring-background ${tone}`}
-              >
-                <Icon className="w-2.5 h-2.5" />
-              </span>
-              <p className="text-xs leading-relaxed text-foreground">{e.description}</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">
-                {formatRelativeTime(e.created_at)}
-              </p>
-            </li>
-          )
-        })}
-      </ol>
-    </ScrollArea>
+    <div className="relative">
+      {/* 顶部/底部渐隐，提示用户内容可滚动 */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-4 bg-gradient-to-b from-popover to-transparent z-10" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-4 bg-gradient-to-t from-popover to-transparent z-10" />
+      <ScrollArea className="h-[420px] pr-2">
+        <ol className="relative pl-3 py-2">
+          <span className="absolute left-[7px] top-2 bottom-2 w-px bg-border" aria-hidden />
+          {events.map((e) => {
+            const Icon = ICONS[e.type] ?? ActivityIcon
+            const tone = TONE[e.type] ?? "bg-muted text-muted-foreground"
+            return (
+              <li key={e.id} className="relative pl-5 pb-4 last:pb-1">
+                <span
+                  className={`absolute -left-[3px] top-0.5 w-3.5 h-3.5 rounded-full flex items-center justify-center ring-2 ring-background ${tone}`}
+                >
+                  <Icon className="w-2.5 h-2.5" />
+                </span>
+                <p className="text-xs leading-relaxed text-foreground">{e.description}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  {formatRelativeTime(e.created_at)}
+                </p>
+              </li>
+            )
+          })}
+        </ol>
+      </ScrollArea>
+    </div>
   )
 }

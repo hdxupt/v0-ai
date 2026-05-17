@@ -53,11 +53,18 @@ export const CorrectionDetailSchema = z.object({
   /**
    * （可选）模型自行估算的 fallback bbox，仅当 line_indexes 全部找不到时使用。
    * [y, x, h, w] 单位 0~100。
+   *
+   * 注意这里**故意不用 z.tuple**：tuple 在 JSON Schema 里会变成
+   * `items: [obj, obj, obj, obj]` 的数组形式，而 Anthropic 直连 API 强制要求
+   * `items` 必须是单个 object schema，否则报
+   * `output_config.format.schema: Invalid schema: Array types must be specified
+   * with a single object schema for 'items'`。改用定长 array 即可两边都通过。
    */
   bounding_box: z
-    .tuple([z.number(), z.number(), z.number(), z.number()])
+    .array(z.number())
+    .length(4)
     .optional()
-    .describe("可选 fallback bbox（line_indexes 优先）"),
+    .describe("可选 fallback bbox [y,x,h,w]，单位 0~100（line_indexes 优先）"),
   /** （可选）页码索引，0-based；默认 0，多页提交时模型必须明确 */
   page_index: z.number().int().min(0).optional().describe("0-based 页码"),
   confidence: z.number().min(0).max(1).describe("整体置信度"),

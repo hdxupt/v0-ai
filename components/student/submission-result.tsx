@@ -14,6 +14,7 @@ import { toFileSrc } from "@/lib/blob-url"
 import { AiCommentStructured } from "@/components/student/ai-comment-structured"
 import { AnnotationDetailList } from "@/components/student/annotation-detail-list"
 import { ScoreProvenance } from "@/components/grading/score-provenance"
+import { PracticeSetPanel } from "@/components/student/practice-set"
 import { OcrTranscriptPanel, type TranscriptAnnotation } from "@/components/grading/ocr-transcript-panel"
 
 export function SubmissionResult({ submission, task }: { submission: Submission; task: Task }) {
@@ -248,6 +249,9 @@ function GradedView({ submission, task }: { submission: Submission; task: Task }
           </>
         )}
       </Card>
+
+      {/* AI 变式题闭环：看懂错误 → 马上练同知识点变式题 */}
+      <PracticeSetPanel submissionId={submission.id} initialPractice={submission.practice_data} />
     </>
   )
 }

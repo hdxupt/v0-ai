@@ -9,10 +9,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils"
 import { formatRelativeTime } from "@/lib/format"
 import { toViewerBoxes, normalizeWeakPoints, type Submission, type Task, type ViewerBox } from "@/lib/types"
-import { isAIGradingV2 } from "@/lib/types"
+import { isAIGradingV2, buildScoreBreakdown } from "@/lib/types"
 import { toFileSrc } from "@/lib/blob-url"
 import { AiCommentStructured } from "@/components/student/ai-comment-structured"
 import { AnnotationDetailList } from "@/components/student/annotation-detail-list"
+import { ScoreProvenance } from "@/components/grading/score-provenance"
 import { OcrTranscriptPanel, type TranscriptAnnotation } from "@/components/grading/ocr-transcript-panel"
 
 export function SubmissionResult({ submission, task }: { submission: Submission; task: Task }) {
@@ -96,6 +97,7 @@ function GradedView({ submission, task }: { submission: Submission; task: Task }
   const excellent = scorePercent >= 85
   const viewerBoxes = toViewerBoxes(submission.ai_issues)
   const weakPoints = normalizeWeakPoints(submission.weak_points)
+  const scoreBreakdown = buildScoreBreakdown(submission.ai_issues)
   /** 与图片 bbox 共享的高亮状态：null 表示无悬停 */
   const [activeBoxId, setActiveBoxId] = useState<string | null>(null)
 
@@ -152,6 +154,15 @@ function GradedView({ submission, task }: { submission: Submission; task: Task }
           </div>
         </div>
       </Card>
+
+      {/* 评分溯源：满分→逐条扣分→最终分，hover 联动图片批注 */}
+      {scoreBreakdown && (
+        <ScoreProvenance
+          breakdown={scoreBreakdown}
+          activeId={activeBoxId}
+          onHoverChange={setActiveBoxId}
+        />
+      )}
 
       {/* Teacher comment */}
       {submission.teacher_comment && (

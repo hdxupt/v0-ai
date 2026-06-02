@@ -57,6 +57,9 @@ export interface AIIssueAnnotation {
 /** v2 — bounding box returned by the real AI (4 类型 + 置信度) */
 export type AIBboxType = "error" | "partial" | "highlight" | "missing"
 
+/** 五维能力维度，与 radar_analysis 的 key 一致 */
+export type RubricDimension = "basics" | "logic" | "knowledge" | "application" | "presentation"
+
 export interface AICorrectionDetail {
   id: number
   type: AIBboxType
@@ -64,6 +67,8 @@ export interface AICorrectionDetail {
   process_analysis: string
   correct_answer?: string
   score_delta?: number
+  /** 该扣分点主要拉低的能力维度（评分可追溯）。旧数据可能缺失。 */
+  rubric_dimension?: RubricDimension
   bounding_box: [number, number, number, number] // [y, x, h, w]
   confidence: number
 }
@@ -155,6 +160,9 @@ export interface ViewerBox {
   confidence?: number
   correct_answer?: string
   question_text?: string
+  /** 评分可追溯：该项扣/加分与关联维度 */
+  score_delta?: number
+  rubric_dimension?: RubricDimension
 }
 
 export function toViewerBoxes(field: AIIssuesField | null | undefined): ViewerBox[] {
@@ -176,6 +184,8 @@ export function toViewerBoxes(field: AIIssuesField | null | undefined): ViewerBo
           correct_answer: d.correct_answer,
           question_text: d.question_text,
           message: d.process_analysis,
+          score_delta: d.score_delta,
+          rubric_dimension: d.rubric_dimension,
         }
       })
   }
@@ -191,6 +201,108 @@ export function toViewerBoxes(field: AIIssuesField | null | undefined): ViewerBo
     }))
   }
   return []
+}
+
+/* ============================== 评分可追溯（Score Provenance） ============================== */
+
+export const RUBRIC_DIMENSIONS: RubricDimension[] = [
+  "basics",
+  "logic",
+  "knowledge",
+  "application",
+  "presentation",
+]
+
+export const RUBRIC_DIMENSION_LABEL: Record<RubricDimension, string> = {
+  basics: "计算与基础",
+  logic: "逻辑思维",
+  knowledge: "知识掌握",
+  application: "应用能力",
+  presentation: "书写规范",
+}
+
+/** 单条扣/加分明细，id 与 ViewerBox 同源，可用于 hover 联动图片 */
+export interface ScoreDeductionItem {
+  id: string
+  ordinal: number
+  type: AIBboxType
+  /** 带符号：扣分为负、亮点加分为正或 0 */
+  delta: number
+  reason: string
+  dimension?: RubricDimension
+}
+
+export interface DimensionBreakdown {
+  dimension: RubricDimension
+  label: string
+  /** 五维雷达得分 0~100 */
+  score: number
+  /** 归属到该维度的扣分总额（绝对值） */
+  deducted: number
+  itemCount: number
+}
+
+export interface ScoreBreakdown {
+  /** 是否有逐项分值数据。false = 早期数据没记 score_delta，UI 走降级展示 */
+  available: boolean
+  /** 满分基准（按 100 归一） */
+  fullScore: number
+  /** 最终得分（来自 summary.total_score） */
+  finalScore: number
+  items: ScoreDeductionItem[]
+  /** 所有 delta 之和（通常为负） */
+  totalDelta: number
+  /** fullScore + totalDelta 是否约等于 finalScore（±1 容差） */
+  reconciled: boolean
+  /** 综合评定调整 = finalScore - (fullScore + totalDelta)，用于诚实对账 */
+  residual: number
+  dimensions: DimensionBreakdown[]
+}
+
+/**
+ * 从 v2 批改结果构造"满分 → 逐条扣分 → 最终分"的可追溯账本。
+ * 纯函数，服务端 / 客户端都可调用。非 v2 数据返回 null。
+ */
+export function buildScoreBreakdown(field: AIIssuesField | null | undefined): ScoreBreakdown | null {
+  if (!isAIGradingV2(field)) return null
+  const details = field.correction_details ?? []
+
+  const items: ScoreDeductionItem[] = details.map((d, i) => ({
+    id: `v2-${d.id ?? i}`,
+    ordinal: i + 1,
+    type: d.type,
+    delta: typeof d.score_delta === "number" ? d.score_delta : 0,
+    reason: d.question_text?.trim() || d.process_analysis?.slice(0, 40) || "未命名扣分点",
+    dimension: d.rubric_dimension,
+  }))
+
+  const hasDelta = details.some((d) => typeof d.score_delta === "number" && d.score_delta !== 0)
+  const fullScore = 100
+  const finalScore = Math.max(0, Math.min(100, field.summary?.total_score ?? 0))
+  const totalDelta = items.reduce((s, it) => s + it.delta, 0)
+  const residual = finalScore - (fullScore + totalDelta)
+
+  const dimensions: DimensionBreakdown[] = RUBRIC_DIMENSIONS.map((dim) => {
+    const dimDeductions = items.filter((it) => it.dimension === dim && it.delta < 0)
+    return {
+      dimension: dim,
+      label: RUBRIC_DIMENSION_LABEL[dim],
+      score: field.radar_analysis?.[dim] ?? 0,
+      deducted: Math.abs(dimDeductions.reduce((s, it) => s + it.delta, 0)),
+      itemCount: dimDeductions.length,
+    }
+  })
+
+  return {
+    available: hasDelta,
+    fullScore,
+    finalScore,
+    items,
+    totalDelta,
+    reconciled: Math.abs(residual) <= 1,
+    residual,
+    dimensions,
+  }
 }
 
 /** 归一化 weak_points 到字符串数组 */

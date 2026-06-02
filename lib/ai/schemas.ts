@@ -21,6 +21,16 @@ function parseMaybeJsonString<T>(val: unknown): unknown {
 export const BboxTypeEnum = z.enum(["error", "partial", "highlight", "missing"])
 export type BboxType = z.infer<typeof BboxTypeEnum>
 
+/** 评分可追溯：每个扣分点关联到五维能力之一，与 radar_analysis 的 key 完全一致 */
+export const RubricDimensionEnum = z.enum([
+  "basics",
+  "logic",
+  "knowledge",
+  "application",
+  "presentation",
+])
+export type RubricDimension = z.infer<typeof RubricDimensionEnum>
+
 /**
  * Visual Grounding 框
  * bounding_box = [y, x, h, w]，单位是图片 0~100 相对坐标
@@ -37,7 +47,14 @@ export const CorrectionDetailSchema = z.object({
     .min(-100)
     .max(100)
     .optional()
-    .describe("该项相对满分的扣分或加分（错题给负数，亮点给 0 或正数）"),
+    .describe(
+      "该项相对满分的扣/加分。error/partial/missing 必须给负整数（如 -3），" +
+        "highlight 给 0 或正数。所有 score_delta 之和 + 100 应约等于 summary.total_score。",
+    ),
+  rubric_dimension: RubricDimensionEnum.optional().describe(
+    "该扣分点主要拉低的能力维度，必须是 basics/logic/knowledge/application/presentation 之一，" +
+      "与 radar_analysis 对应。用于让学生与老师看清'这一处扣分影响了哪个能力维度'。",
+  ),
   /**
    * 该批注覆盖的 OCR 行号（全局唯一，对应 buildTranscriptForLLM 输出里的 L1/L2/...）。
    * 服务端会把这些行号对应的真实 OCR bbox 取并集，得到该批注的最终位置框。

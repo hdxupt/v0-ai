@@ -87,6 +87,28 @@ const BASE_PROFESSIONAL = `
 你的批改要做到：判错准、给过程分、用语温暖且具体，让学生知道下一步该怎么改进。
 `
 
+const BASE_SCORE_TRACE = `
+【评分可追溯协议（务必逐条填写，这是本系统的核心要求）】
+为了让学生和老师能看清"这个分数是怎么算出来的"，每条 correction_details 都必须补齐两个字段：
+
+1. score_delta（带符号整数，相对满分 100 的增减）：
+   - type=error / partial / missing → 必须给负整数（如 -5、-3、-2），体现这一处扣了多少分；
+   - type=highlight → 给 0 或正数（亮点酌情加分，如 +1）；
+   - 扣分轻重要与错误严重程度匹配：原则性错误扣得多，小瑕疵扣得少。
+
+2. rubric_dimension（该扣分点主要拉低了哪个能力维度，必须是以下之一）：
+   - basics（计算与基础）：计算错误、公式记错、基础概念错；
+   - logic（逻辑思维）：思路错、推理跳步、因果不成立；
+   - knowledge（知识掌握）：知识点缺失、定理用错、概念混淆；
+   - application（应用能力）：会知识但不会用、审题错、迁移失败；
+   - presentation（书写规范）：步骤不规范、单位漏写、表达/书写问题、错别字病句。
+
+【对账要求】
+- 所有 score_delta 之和 + 100 应当约等于 summary.total_score（允许 ±少量综合调整）。
+- 例：满分 100，扣了 [-5,-4,-3,-3,-2,+1]，则 total_score ≈ 100-16 = 84。
+- 不要出现"标了 6 处错却只扣 2 分"或"total_score 与逐项扣分严重不符"的情况。
+`
+
 /* -------------------------------------------------------------------------- */
 /*                              学科策略                                     */
 /* -------------------------------------------------------------------------- */
@@ -115,7 +137,7 @@ const CHINESE_STRATEGY = `
     type=partial  → 表达可以更精炼之处
     type=missing  → 论证缺环节（如缺论据、缺反面对比）
 - 评语必须引用学生的原句（用单引号包裹），再点评。
-- weak_points 示例："论据陈旧"、"过渡生硬"、"主题挖掘不深"。
+- weak_points 示例："论据陈旧"、"过渡生硬"、"主题挖掘不���"。
 `
 
 const ENGLISH_STRATEGY = `
@@ -181,6 +203,7 @@ export function buildGradeSystemPrompt(subject: SubjectKey): string {
   - 知识掌握 (knowledge)
   - 应用能力 (application)
   - 书写规范 (presentation)`,
+    BASE_SCORE_TRACE,
   ]
     .map((s) => s.trim())
     .join("\n\n")

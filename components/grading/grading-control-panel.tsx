@@ -28,7 +28,8 @@ import type {
   Submission,
   Task,
 } from "@/lib/types"
-import { isAIGradingV2, normalizeWeakPoints } from "@/lib/types"
+import { isAIGradingV2, normalizeWeakPoints, buildScoreBreakdown } from "@/lib/types"
+import { ScoreProvenance } from "@/components/grading/score-provenance"
 
 type Phase = "idle" | "processing" | "done" | "error"
 
@@ -96,6 +97,8 @@ export function GradingControlPanel({
   const weakPointStrings = v2
     ? v2.summary.weak_points
     : normalizeWeakPoints(submission.weak_points as any)
+
+  const scoreBreakdown = useMemo(() => buildScoreBreakdown(aiField), [aiField])
 
   async function handleStartAI() {
     setPhase("processing")
@@ -306,6 +309,11 @@ export function GradingControlPanel({
               })}
             </div>
           </Card>
+        ) : null}
+
+        {/* 评分溯源：满分→逐条扣分→最终分 */}
+        {phase === "done" && scoreBreakdown ? (
+          <ScoreProvenance breakdown={scoreBreakdown} />
         ) : null}
 
         {/* 薄弱知识点 */}

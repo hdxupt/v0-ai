@@ -133,6 +133,38 @@ export const GradingResultSchema = z.object({
 })
 export type GradingResult = z.infer<typeof GradingResultSchema>
 
+/* ============================== AI 变式题闭环 ============================== */
+
+export const PracticeQuestionSchema = z.object({
+  dimension: RubricDimensionEnum.optional().describe(
+    "该题针对的能力维度，对应错题归因（basics/logic/knowledge/application/presentation）",
+  ),
+  knowledge: z.string().min(2).max(40).describe("该题针对的知识点 / 错因短语，如'一元二次方程判别式'"),
+  type: z.enum(["choice", "open"]).describe("choice=单选客观题；open=主观解答题"),
+  stem: z.string().min(5).max(400).describe("题干。数学用纯文本表达式，不要用 LaTeX 反斜杠"),
+  options: z.preprocess(
+    parseMaybeJsonString,
+    z
+      .array(z.string().min(1).max(120))
+      .min(2)
+      .max(4)
+      .optional()
+      .describe("客观题选项，形如 ['A. xxx','B. xxx','C. xxx','D. xxx']；type=open 时省略"),
+  ),
+  answer: z.string().min(1).max(300).describe("标准答案：choice 填选项字母如'B'；open 填参考答案要点"),
+  explanation: z.string().min(5).max(500).describe("解析：讲清正确思路，呼应学生原错题的错因"),
+})
+export type PracticeQuestion = z.infer<typeof PracticeQuestionSchema>
+
+export const PracticeSetResultSchema = z.object({
+  basis: z.string().min(2).max(60).describe("本组练习针对的薄弱点摘要，用于标题展示"),
+  questions: z.preprocess(
+    parseMaybeJsonString,
+    z.array(PracticeQuestionSchema).min(1).max(5).describe("2~3 道变式题最佳"),
+  ),
+})
+export type PracticeSetResult = z.infer<typeof PracticeSetResultSchema>
+
 /* ============================== 班级学情报告 ============================== */
 
 export const ScoreDistributionSchema = z.object({

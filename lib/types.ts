@@ -134,6 +134,44 @@ export interface Submission {
    * 旧数据可能为 null。
    */
   ocr_data?: unknown
+  /**
+   * AI 变式题闭环数据。学生点"生成练习"后按需写入。
+   * 旧数据 / 未生成时为 null。
+   */
+  practice_data?: PracticeSet | null
+}
+
+/* ============================== AI 变式题闭环（Practice Loop） ============================== */
+
+/** 题型：单选客观题 / 主观解答题 */
+export type PracticeQuestionType = "choice" | "open"
+
+export interface PracticeQuestion {
+  /** 稳定 id，用于学生作答状态映射 */
+  id: string
+  /** 关联的能力维度（来自错题归因） */
+  dimension?: RubricDimension
+  /** 该题针对的知识点 / 错因，用于"为什么练这道"展示 */
+  knowledge: string
+  type: PracticeQuestionType
+  /** 题干 */
+  stem: string
+  /** 客观题选项（type=choice 时必填），如 ["A. ...", "B. ...", ...] */
+  options?: string[]
+  /** 标准答案：choice 为选项前缀(如 "A")，open 为参考答案要点 */
+  answer: string
+  /** 解析：讲清正确思路，呼应原错题 */
+  explanation: string
+}
+
+export interface PracticeSet {
+  /** 生成版本，便于未来演进 */
+  version: 1
+  /** 生成时间 ISO */
+  generated_at: string
+  /** 生成所基于的薄弱点摘要，用于标题展示 */
+  basis: string
+  questions: PracticeQuestion[]
 }
 
 /* ---- helpers (pure, can be imported from server & client) ---- */

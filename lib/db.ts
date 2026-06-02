@@ -355,6 +355,21 @@ export async function updateSubmissionGrading(
   return data as Submission
 }
 
+/** 写入 AI 变式题闭环数据（学生点"生成练习"后按需调用）。 */
+export async function updateSubmissionPractice(
+  submissionId: string,
+  practice: unknown,
+): Promise<Submission> {
+  const { data, error } = await supabase()
+    .from("submissions")
+    .update({ practice_data: practice })
+    .eq("id", submissionId)
+    .select()
+    .single()
+  if (error) throw error
+  return data as Submission
+}
+
 /* ---------- Notifications ---------- */
 export async function listNotifications(userId: string, limit = 30): Promise<AppNotification[]> {
   const { data, error } = await supabase()

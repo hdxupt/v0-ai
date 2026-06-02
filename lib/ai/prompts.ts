@@ -106,7 +106,7 @@ const BASE_SCORE_TRACE = `
 【对账要求】
 - 所有 score_delta 之和 + 100 应当约等于 summary.total_score（允许 ±少量综合调整）。
 - 例：满分 100，扣了 [-5,-4,-3,-3,-2,+1]，则 total_score ≈ 100-16 = 84。
-- 不要出现"标了 6 处错却只扣 2 分"或"total_score 与逐项扣分严重不符"的情况。
+- 不要出现"标了 6 处错却只扣 2 分"或"total_score 与逐项扣分严重���符"的情况。
 `
 
 /* -------------------------------------------------------------------------- */
@@ -314,6 +314,72 @@ export function buildClassReportUserPrompt(input: BuildClassReportInput): string
       }`,
     )
   }
+  return lines.join("\n")
+}
+
+/* -------------------------------------------------------------------------- */
+/*                          AI 变式题（错题闭环）Prompt                      */
+/* -------------------------------------------------------------------------- */
+
+export interface BuildPracticeInput {
+  subject: SubjectKey
+  studentName: string
+  /** 学生本次得分 */
+  score: number
+  /** 薄弱知识点短语 */
+  weakPoints: string[]
+  /** 错题摘要：题干 + 错因解析 + 维度，来自 correction_details */
+  mistakes: Array<{
+    question_text: string
+    process_analysis: string
+    correct_answer?: string
+    dimension?: string
+  }>
+}
+
+export function buildPracticeSystemPrompt(subject: SubjectKey): string {
+  return [
+    `你是一位${labelFor(subject)}名师，正在为学生做"错题举一反三"专项训练。`,
+    `学生刚做完一次作业并被批改，你要根据他的真实错题，出几道"同知识点、换情境"的变式题，帮他巩固。`,
+    `
+【出题铁律】
+1. 紧扣错因：每道变式题必须针对学生真实犯过的错（同一知识点 / 同一易错点），不要出无关题。
+2. 换情境不换本质：数字、背景、问法可以变，但考查的知识点与原错题一致，难度相当或略高。
+3. 题型搭配：优先出 1~2 道单选客观题（type=choice，方便学生当场自测）+ 1 道解答题（type=open）。
+4. 客观题选项要有迷惑性：错误选项应踩中常见误区（最好就是学生原来犯的错），不要凑数。
+5. answer 必须严格正确；explanation 要讲清正确思路，并点出"这正是你上次错的地方"式的呼应。
+6. dimension 用错题归因的能力维度（basics/logic/knowledge/application/presentation）。
+7. 数学表达式用纯文本（如 x^2、√3、≥），不要输出 LaTeX 反斜杠命令。
+8. 全部用中文，语气鼓励、具体。`,
+    BASE_OUTPUT_CONTRACT,
+    `【输出】basis（一句话点明本组练习针对的薄弱点）+ questions（2~3 道变式题）。`,
+  ]
+    .map((s) => s.trim())
+    .join("\n\n")
+}
+
+export function buildPracticeUserPrompt(input: BuildPracticeInput): string {
+  const lines = [
+    `请根据以下学生的真实错题，生成针对性变式题。`,
+    ``,
+    `【学生】${input.studentName} · ${labelFor(input.subject)} · 本次得分 ${input.score}/100`,
+    `【薄弱知识点】${input.weakPoints.join("、") || "（未单列，请从错题中归纳）"}`,
+    ``,
+    `【本次错题清单】`,
+  ]
+  if (input.mistakes.length === 0) {
+    lines.push(`（本次没有明显错题，请围绕薄弱知识点出巩固提高题）`)
+  } else {
+    input.mistakes.forEach((m, i) => {
+      lines.push(
+        `${i + 1}. 原题/原句：${m.question_text}`,
+        `   错因解析：${m.process_analysis}${m.correct_answer ? `；正确：${m.correct_answer}` : ""}${
+          m.dimension ? `；维度：${m.dimension}` : ""
+        }`,
+      )
+    })
+  }
+  lines.push(``, `请输出 2~3 道变式题，紧扣上面的错因。`)
   return lines.join("\n")
 }
 

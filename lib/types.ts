@@ -343,6 +343,90 @@ export function buildScoreBreakdown(field: AIIssuesField | null | undefined): Sc
   }
 }
 
+/* ============================== 班级典型错例聚合（讲评稿用） ============================== */
+
+export interface TypicalMistake {
+  /** 该错点关联的知识点 / 错因短语 */
+  knowledge: string
+  /** 主要能力维度 */
+  dimension?: RubricDimension
+  dimensionLabel?: string
+  /** 全班犯该类错误的人数 */
+  studentCount: number
+  /** 代表性错因解析（取最具体的一条） */
+  sampleReason: string
+  /** 代表性正确答案（若有） */
+  sampleCorrect?: string
+  /** 出错学生姓名（最多展示若干个） */
+  studentNames: string[]
+}
+
+/**
+ * 从全班已批改 submissions 聚合"典型错例"：按知识点/错因短语归并，统计出错人数。
+ * 纯函数、零 AI 调用。用于讲评稿"典型错例"板块。
+ */
+export function aggregateTypicalMistakes(
+  submissions: Array<Pick<Submission, "student_name" | "ai_issues">>,
+  limit = 5,
+): TypicalMistake[] {
+  // key = 归一化后的知识点短语
+  const map = new Map<
+    string,
+    {
+      knowledge: string
+      dimension?: RubricDimension
+      students: Set<string>
+      reasons: string[]
+      corrects: string[]
+    }
+  >()
+
+  for (const s of submissions) {
+    const field = s.ai_issues
+    if (!isAIGradingV2(field)) continue
+    // 同一学生同一知识点只计一次
+    const seenThisStudent = new Set<string>()
+    for (const d of field.correction_details ?? []) {
+      if (d.type === "highlight") continue // 亮点不是错例
+      const raw = (d.question_text || d.process_analysis || "").trim()
+      if (!raw) continue
+      // 用前 16 字做聚类键，归并相近错因
+      const key = raw.slice(0, 16)
+      if (seenThisStudent.has(key)) continue
+      seenThisStudent.add(key)
+
+      const entry =
+        map.get(key) ??
+        {
+          knowledge: raw.length > 24 ? raw.slice(0, 24) + "…" : raw,
+          dimension: d.rubric_dimension,
+          students: new Set<string>(),
+          reasons: [] as string[],
+          corrects: [] as string[],
+        }
+      entry.students.add(s.student_name)
+      if (d.process_analysis) entry.reasons.push(d.process_analysis)
+      if (d.correct_answer) entry.corrects.push(d.correct_answer)
+      if (!entry.dimension && d.rubric_dimension) entry.dimension = d.rubric_dimension
+      map.set(key, entry)
+    }
+  }
+
+  return Array.from(map.values())
+    .map((e) => ({
+      knowledge: e.knowledge,
+      dimension: e.dimension,
+      dimensionLabel: e.dimension ? RUBRIC_DIMENSION_LABEL[e.dimension] : undefined,
+      studentCount: e.students.size,
+      // 取最长的一条解析当代表（通常最具体）
+      sampleReason: e.reasons.sort((a, b) => b.length - a.length)[0] ?? "",
+      sampleCorrect: e.corrects[0],
+      studentNames: Array.from(e.students),
+    }))
+    .sort((a, b) => b.studentCount - a.studentCount)
+    .slice(0, limit)
+}
+
 /** 归一化 weak_points 到字符串数组 */
 export function normalizeWeakPoints(field: WeakPointField[] | null | undefined): string[] {
   if (!field) return []

@@ -427,6 +427,110 @@ export function aggregateTypicalMistakes(
     .slice(0, limit)
 }
 
+/* ============================== 纵向学情追踪（成长曲线） ============================== */
+
+export interface GrowthPoint {
+  /** 第几次作业（从 1 起） */
+  index: number
+  /** 横轴标签：批改日期 M/D */
+  dateLabel: string
+  /** 完整日期 YYYY-MM-DD（tooltip 用） */
+  fullDate: string
+  /** 总分 0-100 */
+  totalScore: number
+  /** 五维分数 0-100 */
+  basics: number
+  logic: number
+  knowledge: number
+  application: number
+  presentation: number
+}
+
+export interface GrowthSummary {
+  points: GrowthPoint[]
+  /** 总分相对首次的提升（正=进步） */
+  totalDelta: number
+  /** 最新一次的总分 */
+  latestScore: number
+  /** 进步最大的维度 */
+  mostImprovedDimension?: { dimension: RubricDimension; label: string; delta: number }
+  /** 仍最薄弱的维度（最新一次最低分） */
+  weakestDimension?: { dimension: RubricDimension; label: string; score: number }
+}
+
+const GROWTH_DIMENSIONS: RubricDimension[] = [
+  "basics",
+  "logic",
+  "knowledge",
+  "application",
+  "presentation",
+]
+
+/**
+ * 从一名学生的多次已批改作业派生成长曲线数据。
+ * 纯函数：按批改时间升序，提取每次的总分与五维分。零 AI 调用。
+ */
+export function buildGrowthSeries(
+  submissions: Array<Pick<Submission, "status" | "graded_at" | "submitted_at" | "ai_issues">>,
+): GrowthSummary {
+  const graded = submissions
+    .filter((s) => s.status === "graded" && isAIGradingV2(s.ai_issues))
+    .map((s) => ({ ...s, _t: s.graded_at ?? s.submitted_at ?? "" }))
+    .sort((a, b) => a._t.localeCompare(b._t))
+
+  const points: GrowthPoint[] = graded.map((s, i) => {
+    const field = s.ai_issues as AIGradingV2
+    const radar = field.radar_analysis
+    const d = s._t ? new Date(s._t) : null
+    return {
+      index: i + 1,
+      dateLabel: d ? `${d.getMonth() + 1}/${d.getDate()}` : `第${i + 1}次`,
+      fullDate: d ? d.toISOString().slice(0, 10) : "",
+      totalScore: Math.round(field.summary?.total_score ?? 0),
+      basics: Math.round(radar?.basics ?? 0),
+      logic: Math.round(radar?.logic ?? 0),
+      knowledge: Math.round(radar?.knowledge ?? 0),
+      application: Math.round(radar?.application ?? 0),
+      presentation: Math.round(radar?.presentation ?? 0),
+    }
+  })
+
+  const first = points[0]
+  const latest = points[points.length - 1]
+
+  let mostImprovedDimension: GrowthSummary["mostImprovedDimension"]
+  let weakestDimension: GrowthSummary["weakestDimension"]
+
+  if (first && latest && points.length >= 2) {
+    let bestDelta = Number.NEGATIVE_INFINITY
+    for (const dim of GROWTH_DIMENSIONS) {
+      const delta = latest[dim] - first[dim]
+      if (delta > bestDelta) {
+        bestDelta = delta
+        mostImprovedDimension = { dimension: dim, label: RUBRIC_DIMENSION_LABEL[dim], delta }
+      }
+    }
+  }
+
+  if (latest) {
+    let lowest = Number.POSITIVE_INFINITY
+    for (const dim of GROWTH_DIMENSIONS) {
+      if (latest[dim] < lowest) {
+        lowest = latest[dim]
+        weakestDimension = { dimension: dim, label: RUBRIC_DIMENSION_LABEL[dim], score: latest[dim] }
+      }
+    }
+  }
+
+  return {
+    points,
+    totalDelta: first && latest ? latest.totalScore - first.totalScore : 0,
+    latestScore: latest?.totalScore ?? 0,
+    mostImprovedDimension,
+    weakestDimension,
+  }
+}
+
 /** 归一化 weak_points 到字符串数组 */
 export function normalizeWeakPoints(field: WeakPointField[] | null | undefined): string[] {
   if (!field) return []

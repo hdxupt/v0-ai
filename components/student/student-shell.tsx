@@ -9,6 +9,7 @@ import { NotificationBell } from "@/components/app/notification-bell"
 import { ThemeToggle } from "@/components/app/theme-toggle"
 import { TaskInbox } from "@/components/student/task-inbox"
 import { SubmissionResult } from "@/components/student/submission-result"
+import { GrowthTrend } from "@/components/student/growth-trend"
 import { useAuth } from "@/components/auth/auth-provider"
 import { createClient } from "@/lib/supabase/client"
 import { listTasksForStudent, listSubmissionsByStudent } from "@/lib/db"
@@ -166,7 +167,10 @@ export function StudentShell({
               {selectedSubmission && selectedTask ? (
                 <SubmissionResult submission={selectedSubmission} task={selectedTask} />
               ) : (
-                <EmptyState />
+                <div className="space-y-5">
+                  <GrowthTrend submissions={submissions} />
+                  <EmptyState />
+                </div>
               )}
             </div>
           </div>

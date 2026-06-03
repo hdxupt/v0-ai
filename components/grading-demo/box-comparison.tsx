@@ -104,7 +104,7 @@ function Panel({ title, subtitle, tone, boxes, imgSrc }: PanelProps) {
   )
 }
 
-const IMG = "/demo/handwritten-math.png"
+const IMG = "/images/handwritten-math.png"
 
 // 优化前：OCR 在手写算式上失配 —— 一处错误整个框丢失（灰虚线占位），另一处退化成框住整道大题的粗大框
 const BEFORE_BOXES: DemoBox[] = [

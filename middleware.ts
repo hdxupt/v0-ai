@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { SESSION_COOKIE, LEGACY_COOKIE_NAMES, deserializeUser } from "@/lib/auth"
 
-const PUBLIC_PATHS = ["/login", "/api/auth", "/architecture", "/impact", "/grading-demo"]
+const PUBLIC_PATHS = ["/login", "/api/auth", "/architecture", "/impact", "/grading-demo", "/api/debug"]
 
 /**
  * 单 session 路由策略：

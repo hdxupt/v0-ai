@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { createPortal } from "react-dom"
 import { Printer, X, Loader2, FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
@@ -43,6 +44,20 @@ export function LectureExport({ taskId, meta, typicalMistakes }: Props) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [report, setReport] = useState<ClassReport | null>(null)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => setMounted(true), [])
+
+  function handlePrint() {
+    // 打印时给 body 加标记类，CSS 据此只显示讲评稿弹层，避免空白页
+    document.body.classList.add("lecture-printing")
+    const cleanup = () => {
+      document.body.classList.remove("lecture-printing")
+      window.removeEventListener("afterprint", cleanup)
+    }
+    window.addEventListener("afterprint", cleanup)
+    window.print()
+  }
 
   async function handleOpen() {
     setOpen(true)
@@ -68,48 +83,54 @@ export function LectureExport({ taskId, meta, typicalMistakes }: Props) {
         一键讲评稿
       </Button>
 
-      {open ? (
-        <div className="fixed inset-0 z-50 flex flex-col bg-foreground/40 backdrop-blur-sm">
-          {/* 顶部工具栏（打印时隐藏） */}
-          <div className="print:hidden flex items-center justify-between gap-3 px-6 py-3 bg-card border-b border-border shadow-sm">
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <FileText className="w-4 h-4 text-primary" />
-              讲评稿预览
-              <span className="text-xs text-muted-foreground font-normal">
-                · 点击「打印 / 导出 PDF」后在弹窗中选择「另存为 PDF」
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                onClick={() => window.print()}
-                disabled={loading || !report}
-                className="bg-primary hover:bg-primary/90"
-              >
-                <Printer className="w-3.5 h-3.5" />
-                打印 / 导出 PDF
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
-
-          {/* 滚动区 */}
-          <div className="flex-1 overflow-auto py-8 px-4">
-            {loading || !report ? (
-              <div className="mx-auto flex h-64 max-w-[210mm] items-center justify-center rounded-md bg-card">
-                <div className="flex flex-col items-center gap-3 text-muted-foreground">
-                  <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                  <span className="text-sm">AI 正在生成讲评稿…</span>
+      {open && mounted
+        ? createPortal(
+            <div
+              data-lecture-portal
+              className="fixed inset-0 z-50 flex flex-col bg-foreground/40 backdrop-blur-sm"
+            >
+              {/* 顶部工具栏（打印时隐藏） */}
+              <div className="print:hidden flex items-center justify-between gap-3 px-6 py-3 bg-card border-b border-border shadow-sm">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <FileText className="w-4 h-4 text-primary" />
+                  讲评稿预览
+                  <span className="text-xs text-muted-foreground font-normal">
+                    · 点击「打印 / 导出 PDF」后在弹窗中选择「另存为 PDF」
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    onClick={handlePrint}
+                    disabled={loading || !report}
+                    className="bg-primary hover:bg-primary/90"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    打印 / 导出 PDF
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
+                    <X className="w-4 h-4" />
+                  </Button>
                 </div>
               </div>
-            ) : (
-              <LectureSheet report={report} meta={meta} typicalMistakes={typicalMistakes} />
-            )}
-          </div>
-        </div>
-      ) : null}
+
+              {/* 滚动区 */}
+              <div className="flex-1 overflow-auto py-8 px-4">
+                {loading || !report ? (
+                  <div className="mx-auto flex h-64 max-w-[210mm] items-center justify-center rounded-md bg-card">
+                    <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                      <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                      <span className="text-sm">AI 正在生成讲评稿…</span>
+                    </div>
+                  </div>
+                ) : (
+                  <LectureSheet report={report} meta={meta} typicalMistakes={typicalMistakes} />
+                )}
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </>
   )
 }

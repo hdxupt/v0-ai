@@ -85,6 +85,13 @@ export const CorrectionDetailSchema = z.object({
   /** （可选）页码索引，0-based；默认 0，多页提交时模型必须明确 */
   page_index: z.number().int().min(0).optional().describe("0-based 页码"),
   confidence: z.number().min(0).max(1).describe("整体置信度"),
+  /**
+   * （服务端填写，模型无需输出）该框的定位来源：
+   * - "ocr"：由命中的 OCR 行真实 bbox 求并集得到，文字定位最可靠；
+   * - "vlm"：OCR 未能识别该区域（手写/公式/图块），由视觉大模型 grounding 补位。
+   * 前端据此区分渲染（实线 vs 虚线 + "AI 定位"标签）。
+   */
+  box_source: z.enum(["ocr", "vlm"]).optional().describe("定位来源：ocr 行框 / vlm 视觉补位"),
 })
 export type CorrectionDetail = z.infer<typeof CorrectionDetailSchema>
 

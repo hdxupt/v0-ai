@@ -163,14 +163,12 @@ export function StudentShell({
                 loading={loading}
               />
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 space-y-5">
+              <GrowthTrend submissions={submissions} />
               {selectedSubmission && selectedTask ? (
                 <SubmissionResult submission={selectedSubmission} task={selectedTask} />
               ) : (
-                <div className="space-y-5">
-                  <GrowthTrend submissions={submissions} />
-                  <EmptyState />
-                </div>
+                <EmptyState />
               )}
             </div>
           </div>

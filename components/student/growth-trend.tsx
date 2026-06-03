@@ -150,7 +150,7 @@ export function GrowthTrend({ submissions }: Props) {
 
         {/* 趋势图 */}
         <ChartContainer config={chartConfig} className="h-[280px] w-full">
-          <LineChart data={growth.points} margin={{ top: 12, right: 16, left: -16, bottom: 0 }}>
+          <LineChart data={growth.points} margin={{ top: 12, right: 16, left: 0, bottom: 0 }}>
             <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="var(--border)" />
             <XAxis
               dataKey="dateLabel"
@@ -160,10 +160,11 @@ export function GrowthTrend({ submissions }: Props) {
             />
             <YAxis
               domain={[0, 100]}
+              ticks={[0, 25, 50, 75, 100]}
               tickLine={false}
               axisLine={false}
               tick={{ fontSize: 12, fill: "var(--muted-foreground)" }}
-              width={40}
+              width={32}
             />
             <ChartTooltip content={<ChartTooltipContent indicator="line" />} />
             {SERIES.filter((s) => active.has(s.key)).map((s) => (

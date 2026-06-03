@@ -167,3 +167,37 @@
     color-mix(in oklch, var(--accent) 40%, transparent)
   );
 }
+
+/* ============================== 讲评稿 PDF 打印 ============================== */
+@media print {
+  /* 隐藏所有非讲评稿内容 */
+  body * {
+    visibility: hidden;
+  }
+  .lecture-print-root,
+  .lecture-print-root * {
+    visibility: visible;
+  }
+  .lecture-print-root {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 0;
+    margin: 0;
+    box-shadow: none !important;
+    border: none !important;
+  }
+  /* 打印时强制隐藏交互控件 */
+  .print\:hidden {
+    display: none !important;
+  }
+  /* 避免错例/板块跨页割裂 */
+  .print-block {
+    break-inside: avoid;
+  }
+  @page {
+    size: A4;
+    margin: 16mm 14mm;
+  }
+}

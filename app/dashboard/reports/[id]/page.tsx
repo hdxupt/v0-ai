@@ -1,19 +1,20 @@
 import dynamic from "next/dynamic"
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { ChevronLeft, Download, Share2, Sparkles } from "lucide-react"
+import { ChevronLeft, Share2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ClassAIDiagnostic } from "@/components/reports/class-ai-diagnostic"
+import { LectureExport } from "@/components/reports/lecture-export"
 import {
   StudentStatusPanel,
   type PanelStudent,
 } from "@/components/reports/student-status-panel"
 import { TeachingSuggestions } from "@/components/reports/teaching-suggestions"
 import { createClient } from "@/lib/supabase/client"
-import { isAIGradingV2, normalizeWeakPoints } from "@/lib/types"
+import { isAIGradingV2, normalizeWeakPoints, aggregateTypicalMistakes } from "@/lib/types"
 import type { Submission, AIGradingV2 } from "@/lib/types"
 
 const ScoreDistributionChart = dynamic(
@@ -126,6 +127,9 @@ export default async function ReportPage({
     .slice(0, 1)
     .map(([name]) => name)[0]
 
+  /* ----------------------------- 典型错例聚合（讲评稿用，零额外AI） ----------------------------- */
+  const typicalMistakes = aggregateTypicalMistakes(graded, 5)
+
   /* ----------------------------- 学生提交状态 ----------------------------- */
   const panelStudents: PanelStudent[] =
     (classStudents ?? []).map((u: any, idx: number) => {
@@ -213,14 +217,20 @@ export default async function ReportPage({
             <Share2 className="w-3.5 h-3.5" />
             分享报告
           </Button>
-          <Button variant="outline" size="sm" className="bg-card">
-            <Download className="w-3.5 h-3.5" />
-            导出 PDF
-          </Button>
-          <Button size="sm" className="bg-primary hover:bg-primary/90">
-            <Sparkles className="w-3.5 h-3.5" />
-            一键备课
-          </Button>
+          <LectureExport
+            taskId={id}
+            typicalMistakes={typicalMistakes}
+            meta={{
+              taskTitle: task.title,
+              subject: task.subject ?? "—",
+              className,
+              teacherName: task.teacher_name ?? "任课教师",
+              date: `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`,
+              submitted: submittedCount,
+              total: totalStudents,
+              average: avg,
+            }}
+          />
         </div>
       </div>
 

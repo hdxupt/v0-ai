@@ -69,9 +69,9 @@ export function LectureExport({ taskId, meta, typicalMistakes }: Props) {
       </Button>
 
       {open ? (
-        <div className="lecture-overlay fixed inset-0 z-50 flex flex-col bg-foreground/40 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex flex-col bg-foreground/40 backdrop-blur-sm">
           {/* 顶部工具栏（打印时隐藏） */}
-          <div className="lecture-toolbar flex items-center justify-between gap-3 px-6 py-3 bg-card border-b border-border shadow-sm">
+          <div className="print:hidden flex items-center justify-between gap-3 px-6 py-3 bg-card border-b border-border shadow-sm">
             <div className="flex items-center gap-2 text-sm font-medium">
               <FileText className="w-4 h-4 text-primary" />
               讲评稿预览
@@ -126,7 +126,7 @@ function LectureSheet({
   typicalMistakes: TypicalMistake[]
 }) {
   return (
-    <article className="lecture-sheet mx-auto bg-white text-[#1a1a1a] shadow-lg">
+    <article className="lecture-print-root mx-auto w-[210mm] max-w-full bg-white px-[14mm] py-[12mm] text-[#1a1a1a] shadow-lg">
       {/* 抬头 */}
       <header className="border-b-2 border-[#0d7d7d] pb-4 mb-5">
         <div className="flex items-baseline justify-between gap-4">

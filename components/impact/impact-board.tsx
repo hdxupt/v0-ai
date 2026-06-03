@@ -164,7 +164,7 @@ export function ImpactBoard({ stats }: Props) {
             <Capability
               icon={Radar}
               title="纵向成长曲线"
-              desc="五维能力随作业次数变化，让"学情看板"名副其实。"
+              desc="五维能力随作业次数变化，让「学情看板」名副其实。"
             />
           </div>
         </Section>

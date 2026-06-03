@@ -71,6 +71,8 @@ export interface AICorrectionDetail {
   rubric_dimension?: RubricDimension
   bounding_box: [number, number, number, number] // [y, x, h, w]
   confidence: number
+  /** 定位来源：ocr 行框求并集 / vlm 视觉补位。旧数据可能缺失。 */
+  box_source?: "ocr" | "vlm"
 }
 
 export interface AIRadarAnalysis {
@@ -201,6 +203,8 @@ export interface ViewerBox {
   /** 评分可追溯：该项扣/加分与关联维度 */
   score_delta?: number
   rubric_dimension?: RubricDimension
+  /** 定位来源：ocr 行框 / vlm 视觉补位，用于前端区分渲染 */
+  box_source?: "ocr" | "vlm"
 }
 
 export function toViewerBoxes(field: AIIssuesField | null | undefined): ViewerBox[] {
@@ -224,6 +228,7 @@ export function toViewerBoxes(field: AIIssuesField | null | undefined): ViewerBo
           message: d.process_analysis,
           score_delta: d.score_delta,
           rubric_dimension: d.rubric_dimension,
+          box_source: d.box_source,
         }
       })
   }

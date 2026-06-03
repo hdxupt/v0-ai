@@ -229,6 +229,8 @@ export function GradingImageViewer({
                   <div
                     className={cn(
                       "absolute inset-0 border-2 rounded animate-in fade-in zoom-in duration-300",
+                      // VLM 视觉补位框用虚线，OCR 行框用实线，让老师一眼区分两类定位来源
+                      box.box_source === "vlm" && "border-dashed",
                       style.border,
                       style.bg,
                     )}
@@ -241,6 +243,11 @@ export function GradingImageViewer({
                   >
                     {box.index ?? idx + 1}
                   </div>
+                  {box.box_source === "vlm" ? (
+                    <div className="absolute -top-2 left-4 px-1 h-4 rounded-sm bg-foreground/80 text-background text-[9px] font-medium flex items-center shadow-sm whitespace-nowrap">
+                      AI 定位
+                    </div>
+                  ) : null}
                   <div
                     className={cn(
                       "absolute z-20 w-[min(280px,42vw)] min-w-[180px] p-2 rounded-md shadow-lg border bg-card",
@@ -252,8 +259,18 @@ export function GradingImageViewer({
                     <div className={cn("flex items-center gap-1.5 text-[11px] font-medium mb-1", style.text)}>
                       <Icon className="w-3 h-3" />
                       {style.label}
+                      {box.box_source ? (
+                        <span className="ml-auto text-[10px] font-normal text-muted-foreground/70">
+                          {box.box_source === "vlm" ? "AI视觉定位" : "OCR行定位"}
+                        </span>
+                      ) : null}
                       {typeof box.confidence === "number" ? (
-                        <span className="ml-auto text-muted-foreground/70 font-normal">
+                        <span
+                          className={cn(
+                            "text-muted-foreground/70 font-normal",
+                            box.box_source ? "" : "ml-auto",
+                          )}
+                        >
                           conf {Math.round(box.confidence * 100)}%
                         </span>
                       ) : null}
@@ -287,6 +304,10 @@ export function GradingImageViewer({
           <Legend dot="bg-[color:var(--warning,#f59e0b)]" label="半对/注意" />
           <Legend dot="bg-emerald-500" label="亮点" />
           <Legend dot="bg-muted-foreground" label="漏做" />
+          <span className="inline-flex items-center gap-1">
+            <span className="w-3 h-2 rounded-sm border border-dashed border-foreground/60" />
+            虚线 = AI 视觉补位定位
+          </span>
         </div>
       </div>
     </div>

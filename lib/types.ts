@@ -39,6 +39,12 @@ export interface Task {
   created_at: string
   /** 软删除时间戳。null 或缺失 = 活跃；非空 = 回收站内。 */
   deleted_at?: string | null
+  /** 教师上传的标准答案图片（公开 URL 数组）。批改时作为参照注入。 */
+  answer_key_urls?: string[]
+  /** 教师录入的标准答案文本（可与图片二选一或并用）。 */
+  answer_key_text?: string | null
+  /** 关键得分点 / 评分备注。留空则 AI 自动评估。 */
+  scoring_notes?: string | null
 }
 
 export type SubmissionStatus = "submitted" | "grading" | "graded"

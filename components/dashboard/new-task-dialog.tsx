@@ -23,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Plus, Sparkles, Clock, Users } from "lucide-react"
+import { Plus, Sparkles, Clock, Users, BookCheck, ImagePlus, X, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import type { ClassInfo, AppUser } from "@/lib/types"
 
@@ -55,6 +55,40 @@ export function NewTaskDialog({
   })
   const [dueTime, setDueTime] = useState("22:00")
   const [estimatedMinutes, setEstimatedMinutes] = useState(30)
+
+  // 标准答案（选填）：图片 URL 数组 + 文本 + 关键得分点
+  const [answerKeyUrls, setAnswerKeyUrls] = useState<string[]>([])
+  const [answerKeyText, setAnswerKeyText] = useState("")
+  const [scoringNotes, setScoringNotes] = useState("")
+  const [uploadingAnswer, setUploadingAnswer] = useState(false)
+
+  async function handleAnswerUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const fileList = e.target.files
+    if (!fileList || fileList.length === 0) return
+    setUploadingAnswer(true)
+    try {
+      for (const file of Array.from(fileList)) {
+        const fd = new FormData()
+        fd.append("file", file)
+        const res = await fetch("/api/upload", { method: "POST", body: fd })
+        if (!res.ok) throw new Error((await res.json()).error || "上传失败")
+        const data = await res.json()
+        const url = data.url ?? data.pathname
+        setAnswerKeyUrls((prev) => [...prev, url])
+      }
+      toast.success("标准答案已上传")
+    } catch (err) {
+      console.error("[v0] answer upload error:", err)
+      toast.error("标准答案上传失败，请重试")
+    } finally {
+      setUploadingAnswer(false)
+      e.target.value = ""
+    }
+  }
+
+  function removeAnswerImage(url: string) {
+    setAnswerKeyUrls((prev) => prev.filter((u) => u !== url))
+  }
 
   const titleError = title.length === 0 ? "请填写作业标题" : title.length > 40 ? "标题最多 40 字" : null
   const reqError = requirements.length === 0 ? "请填写作业要求" : requirements.length > 500 ? "要求最多 500 字" : null
@@ -90,6 +124,9 @@ export function NewTaskDialog({
           estimated_minutes: estimatedMinutes,
           teacher_id: teacher.id,
           teacher_name: teacher.name,
+          answer_key_urls: answerKeyUrls,
+          answer_key_text: answerKeyText.trim() || null,
+          scoring_notes: scoringNotes.trim() || null,
         }),
       })
       if (!res.ok) throw new Error((await res.json()).error || "请求失败")
@@ -103,6 +140,9 @@ export function NewTaskDialog({
       setTitle("")
       setRequirements("")
       setNotes("")
+      setAnswerKeyUrls([])
+      setAnswerKeyText("")
+      setScoringNotes("")
       setOpen(false)
       router.refresh()
     } catch (err) {
@@ -262,6 +302,71 @@ export function NewTaskDialog({
               placeholder="如：第 3 题为附加题，不计入总分；不会的题目可呼出 AI 老师讲解"
               rows={2}
               maxLength={200}
+            />
+          </div>
+
+          {/* Standard answer (optional) */}
+          <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
+            <Label className="text-xs flex items-center gap-1.5">
+              <BookCheck className="w-3.5 h-3.5 text-primary" />
+              标准答案与得分点
+              <span className="text-muted-foreground font-normal">（选填 · 上传后 AI 将对照批改，更准更快）</span>
+            </Label>
+
+            {/* Answer images */}
+            <div className="flex flex-wrap gap-2">
+              {answerKeyUrls.map((url) => (
+                <div key={url} className="relative w-16 h-16 rounded-md overflow-hidden border border-border group">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={url || "/placeholder.svg"} alt="标准答案" className="w-full h-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => removeAnswerImage(url)}
+                    className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center opacity-90"
+                    aria-label="移除"
+                  >
+                    <X className="w-2.5 h-2.5" />
+                  </button>
+                </div>
+              ))}
+              <label className="w-16 h-16 rounded-md border border-dashed border-border flex flex-col items-center justify-center gap-0.5 cursor-pointer hover:border-primary/50 text-muted-foreground hover:text-primary transition-colors">
+                {uploadingAnswer ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <>
+                    <ImagePlus className="w-4 h-4" />
+                    <span className="text-[9px]">上传图片</span>
+                  </>
+                )}
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={handleAnswerUpload}
+                  disabled={uploadingAnswer}
+                />
+              </label>
+            </div>
+
+            {/* Answer text */}
+            <Textarea
+              value={answerKeyText}
+              onChange={(e) => setAnswerKeyText(e.target.value)}
+              placeholder="可直接录入参考答案文本（如各题答案、解题步骤要点），与图片二选一或并用"
+              rows={2}
+              maxLength={1000}
+              className="bg-background"
+            />
+
+            {/* Scoring notes */}
+            <Textarea
+              value={scoringNotes}
+              onChange={(e) => setScoringNotes(e.target.value)}
+              placeholder="关键得分点 / 评分备注（如：第2题需写出辅助线，每步2分；留空则 AI 自动评估）"
+              rows={2}
+              maxLength={500}
+              className="bg-background"
             />
           </div>
 

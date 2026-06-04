@@ -86,10 +86,15 @@ function normalizeDimension(d: string | undefined): RubricDimension | undefined 
 
 /* ----------------------- 各题型批改提示词 ----------------------- */
 
-function blockGradePrompt(type: BlockType, subjectHint: string): string {
+function blockGradePrompt(type: BlockType, subjectHint: string, answerCtx?: string): string {
   const COORD = `坐标说明：把这张【题块小图】看成 1000×1000 网格（左上角原点，x 向右，y 向下）。bbox_2d=[x1,y1,x2,y2] 是错误内容在这张小图里的位置，要紧贴出错的那一小块（一行算式 / 一个公式 / 一个错词），不要框整道题。`
 
-  const COMMON_TAIL = `
+  // 教师提供了标准答案/得分点时，作为权威参照注入——以教师标准为准
+  const ANSWER_BLOCK = answerCtx
+    ? `\n【教师标准答案与得分点（权威参照，严格据此判分）】\n${answerCtx}\n务必对照上述标准答案逐条核对，按关键得分点判断对错与扣分；与标准不一致即为错误。\n`
+    : ""
+
+  const COMMON_TAIL = `${ANSWER_BLOCK}
 对每一处问题输出一个对象：
 - "type": "error"(错) | "partial"(半对) | "highlight"(亮点) | "missing"(漏做)
 - "question_text": 简要题干或学生原句（≤40字）
@@ -128,13 +133,14 @@ async function gradeBlock(
   block: QuestionBlock,
   pageBuffer: Buffer,
   subjectHint: string,
+  answerCtx?: string,
 ): Promise<Omit<CorrectionDetail, "id">[]> {
   // 裁剪出题块小图（数学/作文需精确定位，裁剪后定位更准）
   // 复用已下载的整页 Buffer，避免对同一页重复下载
   const cropped = await cropRegionFromBuffer(pageBuffer, block.region, 3)
   if (!cropped) return []
 
-  const prompt = blockGradePrompt(block.type, subjectHint)
+  const prompt = blockGradePrompt(block.type, subjectHint, answerCtx)
   const messages: QwenMessage[] = [
     {
       role: "user",
@@ -261,6 +267,52 @@ ${issueLines || "（本次未发现明显问题）"}
   }
 }
 
+/** 把教师上传的标准答案图片转写成文本（一次调用，供全部题块复用，避免每块重复传图）。 */
+async function transcribeAnswerImages(urls: string[]): Promise<string> {
+  try {
+    const buffers = await Promise.all(urls.slice(0, 4).map((u) => fetchImageBuffer(u)))
+    const images = await Promise.all(buffers.map((b) => bufferToDataUrl(b)))
+    const r = await callQwenJSON<{ text?: string }>(
+      [
+        {
+          role: "user",
+          content: [
+            ...images.map((url) => ({ type: "image_url" as const, image_url: { url } })),
+            {
+              type: "text",
+              text: '把图中标准答案完整转写为文本，按题号组织。严格只返回 JSON：{"text":"..."}',
+            },
+          ],
+        },
+      ],
+      { temperature: 0, maxTokens: 2000 },
+    )
+    return (r?.text ?? "").trim()
+  } catch (e: any) {
+    console.error("[v0] transcribeAnswerImages failed:", e?.message)
+    return ""
+  }
+}
+
+/** 组装注入批改 prompt 的标准答案上下文（文本 + 图片转写 + 关键得分点）。 */
+async function buildAnswerContext(task: Task): Promise<string | undefined> {
+  const parts: string[] = []
+  const text = (task.answer_key_text ?? "").trim()
+  if (text) parts.push(`标准答案：\n${text}`)
+
+  const urls = task.answer_key_urls ?? []
+  if (urls.length > 0) {
+    const transcribed = await transcribeAnswerImages(urls)
+    if (transcribed) parts.push(`标准答案（图片转写）：\n${transcribed}`)
+  }
+
+  const notes = (task.scoring_notes ?? "").trim()
+  if (notes) parts.push(`关键得分点：\n${notes}`)
+
+  const ctx = parts.join("\n\n").trim()
+  return ctx.length > 0 ? ctx.slice(0, 4000) : undefined
+}
+
 /* ----------------------- 主编排 ----------------------- */
 
 export async function gradeSubmissionWithVLM(
@@ -272,6 +324,10 @@ export async function gradeSubmissionWithVLM(
     subject === "math" ? "数学" : subject === "chinese" ? "语文" : subject === "english" ? "英语" : "学科"
   const imageUrls = (submission.image_urls ?? []).slice(0, 9)
   if (imageUrls.length === 0) throw new Error("学生未上传任何作业图片，无法批改")
+
+  // 教师标准答案上下文（一次构建，供全部题块复用）
+  const answerCtx = await buildAnswerContext(task)
+  if (answerCtx) console.log("[v0] grade-vlm: using teacher answer key, len", answerCtx.length)
 
   /* ---------- Stage 1：逐页分块（多页并行，每页只下载一次 Buffer 复用） ---------- */
   const pages = await Promise.all(
@@ -288,7 +344,7 @@ export async function gradeSubmissionWithVLM(
 
   /* ---------- Stage 2：分流批改各题块（复用对应页的 Buffer） ---------- */
   const blockResults = await pMapLimit(allBlocks, BLOCK_CONCURRENCY, (block) =>
-    gradeBlock(block, pages[block.page_index]!.buffer, subjectHint),
+    gradeBlock(block, pages[block.page_index]!.buffer, subjectHint, answerCtx),
   )
 
   const details: Omit<CorrectionDetail, "id">[] = []
@@ -327,7 +383,7 @@ export async function gradeSubmissionWithVLM(
     weak_points: agg.weak_points,
     ai_issues: {
       version: 2,
-      model: `qwen3-vl-plus (segmented)`,
+      model: answerCtx ? `qwen3-vl-plus (segmented, answer-key)` : `qwen3-vl-plus (segmented)`,
       graded_subject: subject,
       summary,
       correction_details: correctionDetails,

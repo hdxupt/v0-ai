@@ -181,9 +181,11 @@ export function SubmitForm({ task, student, existingSubmission }: SubmitFormProp
         throw new Error(errBody?.error || `upload failed (${res.status})`)
       }
       const data = await res.json()
+      // public store：优先存完整公开 URL（回退 pathname 兼容旧返回）
+      const stored = data.url ?? data.pathname
       setFiles((prev) =>
         prev.map((f) =>
-          f.id === item.id ? { ...f, status: "done", progress: 100, pathname: data.pathname } : f,
+          f.id === item.id ? { ...f, status: "done", progress: 100, pathname: stored } : f,
         ),
       )
       toast.success(
@@ -192,7 +194,7 @@ export function SubmitForm({ task, student, existingSubmission }: SubmitFormProp
           : `图片上传成功：${original.name}`,
         { duration: 2000 },
       )
-      return data.pathname
+      return stored
     } catch (e: any) {
       setFiles((prev) =>
         prev.map((f) => (f.id === item.id ? { ...f, status: "error", progress: 0 } : f)),

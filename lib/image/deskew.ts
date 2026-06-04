@@ -25,7 +25,7 @@ async function fetchBuffer(pathnameOrUrl: string): Promise<Buffer> {
     if (!res.ok) throw new Error(`fetch failed: ${res.status}`)
     return Buffer.from(await res.arrayBuffer())
   }
-  const result = await get(pathnameOrUrl, { access: "private" })
+  const result = await get(pathnameOrUrl, { access: "public" })
   if (!result || !result.stream) throw new Error(`blob not found: ${pathnameOrUrl}`)
   const chunks: Uint8Array[] = []
   const reader = result.stream.getReader()
@@ -73,12 +73,13 @@ export async function rotateImageBlob(
     const newPath = `${base}.deskewed-${Math.round(angleDeg)}.jpg`
 
     const result = await put(newPath, rotated, {
-      access: "private",
+      access: "public",
       contentType: "image/jpeg",
       addRandomSuffix: false,
       allowOverwrite: true,
     })
-    return result.pathname
+    // 返回完整公开 URL，与上传链路保持一致（写回 image_urls 后前端/服务端均可直接访问）
+    return result.url
   } catch (e: any) {
     console.error("[v0] deskew rotate failed:", pathnameOrUrl, e?.message)
     return null

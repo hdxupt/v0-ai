@@ -16,7 +16,7 @@ export async function fetchImageBuffer(pathnameOrUrl: string): Promise<Buffer> {
     if (!res.ok) throw new Error(`fetch failed: ${res.status}`)
     return Buffer.from(await res.arrayBuffer())
   }
-  const result = await get(pathnameOrUrl, { access: "private" })
+  const result = await get(pathnameOrUrl, { access: "public" })
   if (!result || !result.stream) throw new Error(`blob not found: ${pathnameOrUrl}`)
   const chunks: Uint8Array[] = []
   const reader = result.stream.getReader()

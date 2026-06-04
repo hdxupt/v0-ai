@@ -157,16 +157,6 @@ async function gradeBlock(
   }
 
   const issues = Array.isArray(result?.issues) ? result.issues : []
-  console.log(
-    "[v0] gradeBlock done block",
-    block.index,
-    "type",
-    block.type,
-    "region",
-    JSON.stringify(block.region),
-    "→ issues:",
-    issues.length,
-  )
   const out: Omit<CorrectionDetail, "id">[] = []
 
   for (const it of issues) {

@@ -57,6 +57,14 @@ export default function GradingABPage() {
             <span className="font-semibold text-foreground">虚线标识：</span>
             新链路中虚线框表示 VLM 视觉补位定位，与 OCR 行框来源可区分、可追溯。
           </li>
+          <li className="flex gap-2">
+            <span className="font-semibold text-foreground">全栏覆盖：</span>
+            旧链路对左右分栏作业常漏掉一栏；新链路按栏分块逐块批改，左右两栏的错误步骤均被独立定位（本例 13 处）。
+          </li>
+          <li className="flex gap-2">
+            <span className="font-semibold text-foreground">稳定性：</span>
+            对超长解答，新链路内置 JSON 截断恢复，避免单块输出被截断时整道题批改结果丢失。
+          </li>
         </ul>
       </section>
     </main>

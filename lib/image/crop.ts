@@ -10,7 +10,7 @@ import { get } from "@vercel/blob"
  * VLM 在裁剪图内给出的局部坐标，再换算回原图全局坐标用于渲染。
  */
 
-async function fetchBuffer(pathnameOrUrl: string): Promise<Buffer> {
+export async function fetchImageBuffer(pathnameOrUrl: string): Promise<Buffer> {
   if (/^https?:\/\//i.test(pathnameOrUrl)) {
     const res = await fetch(pathnameOrUrl)
     if (!res.ok) throw new Error(`fetch failed: ${res.status}`)
@@ -56,7 +56,21 @@ export async function cropRegion(
   paddingPct = 3,
 ): Promise<CroppedRegion | null> {
   try {
-    const buf = await fetchBuffer(pathnameOrUrl)
+    const buf = await fetchImageBuffer(pathnameOrUrl)
+    return await cropRegionFromBuffer(buf, region, paddingPct)
+  } catch (e: any) {
+    console.error("[v0] cropRegion failed:", e?.message)
+    return null
+  }
+}
+
+/** 与 cropRegion 相同，但直接接受已下载的原图 Buffer，避免对同一页重复下载。 */
+export async function cropRegionFromBuffer(
+  buf: Buffer,
+  region: RegionPct,
+  paddingPct = 3,
+): Promise<CroppedRegion | null> {
+  try {
     const img = sharp(buf, { limitInputPixels: false })
     const meta = await img.metadata()
     const W = meta.width ?? 0
@@ -118,13 +132,17 @@ export function localBoxToGlobal(
   ]
 }
 
-/** 把整张图取出为 data URL（不裁剪），用于分块阶段把整页发给 VLM。 */
-export async function imageToDataUrl(pathnameOrUrl: string): Promise<string> {
-  const buf = await fetchBuffer(pathnameOrUrl)
+/** 把已下载的原图 Buffer 压成 data URL（控制 token），用于分块阶段。 */
+export async function bufferToDataUrl(buf: Buffer): Promise<string> {
   // 统一压成 jpeg，控制 token；长边超过 2000 缩放（VL 对超大图收费高且无收益）
   const out = await sharp(buf, { limitInputPixels: false })
     .resize(2000, 2000, { fit: "inside", withoutEnlargement: true })
     .jpeg({ quality: 88, mozjpeg: true })
     .toBuffer()
   return `data:image/jpeg;base64,${out.toString("base64")}`
+}
+
+/** 把整张图取出为 data URL（不裁剪），用于分块阶段把整页发给 VLM。 */
+export async function imageToDataUrl(pathnameOrUrl: string): Promise<string> {
+  return bufferToDataUrl(await fetchImageBuffer(pathnameOrUrl))
 }

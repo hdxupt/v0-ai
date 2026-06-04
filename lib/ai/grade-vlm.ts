@@ -15,9 +15,10 @@ import {
 } from "./qwen"
 import { segmentPage, type QuestionBlock, type BlockType } from "./segment"
 import {
-  cropRegion,
+  cropRegionFromBuffer,
   localBoxToGlobal,
-  imageToDataUrl,
+  bufferToDataUrl,
+  fetchImageBuffer,
   type RegionPct,
 } from "@/lib/image/crop"
 import { pMapLimit } from "./grade"
@@ -125,11 +126,12 @@ ${COMMON_TAIL}`
 /** 对单个题块批改，返回换算回全局坐标的 CorrectionDetail 片段（不含全局 id）。 */
 async function gradeBlock(
   block: QuestionBlock,
-  pageImageUrl: string,
+  pageBuffer: Buffer,
   subjectHint: string,
 ): Promise<Omit<CorrectionDetail, "id">[]> {
   // 裁剪出题块小图（数学/作文需精确定位，裁剪后定位更准）
-  const cropped = await cropRegion(pageImageUrl, block.region, 3)
+  // 复用已下载的整页 Buffer，避免对同一页重复下载
+  const cropped = await cropRegionFromBuffer(pageBuffer, block.region, 3)
   if (!cropped) return []
 
   const prompt = blockGradePrompt(block.type, subjectHint)
@@ -271,21 +273,22 @@ export async function gradeSubmissionWithVLM(
   const imageUrls = (submission.image_urls ?? []).slice(0, 9)
   if (imageUrls.length === 0) throw new Error("学生未上传任何作业图片，无法批改")
 
-  /* ---------- Stage 1：逐页分块 ---------- */
-  const allBlocks: QuestionBlock[] = []
-  const pageDataUrls: string[] = []
-  for (let p = 0; p < imageUrls.length; p++) {
-    const dataUrl = await imageToDataUrl(imageUrls[p]!)
-    pageDataUrls.push(dataUrl)
-    const blocks = await segmentPage(dataUrl, p)
-    for (const b of blocks.slice(0, MAX_BLOCKS_PER_PAGE)) allBlocks.push(b)
-  }
+  /* ---------- Stage 1：逐页分块（多页并行，每页只下载一次 Buffer 复用） ---------- */
+  const pages = await Promise.all(
+    imageUrls.map(async (url, p) => {
+      const buffer = await fetchImageBuffer(url)
+      const dataUrl = await bufferToDataUrl(buffer)
+      const blocks = (await segmentPage(dataUrl, p)).slice(0, MAX_BLOCKS_PER_PAGE)
+      return { buffer, blocks }
+    }),
+  )
+  const allBlocks: QuestionBlock[] = pages.flatMap((pg) => pg.blocks)
   if (allBlocks.length === 0) throw new Error("VLM 分块未识别到任何题目区域")
   console.log("[v0] grade-vlm: segmented", allBlocks.length, "block(s)")
 
-  /* ---------- Stage 2：分流批改各题块 ---------- */
+  /* ---------- Stage 2：分流批改各题块（复用对应页的 Buffer） ---------- */
   const blockResults = await pMapLimit(allBlocks, BLOCK_CONCURRENCY, (block) =>
-    gradeBlock(block, imageUrls[block.page_index]!, subjectHint),
+    gradeBlock(block, pages[block.page_index]!.buffer, subjectHint),
   )
 
   const details: Omit<CorrectionDetail, "id">[] = []

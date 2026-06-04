@@ -79,6 +79,13 @@ export interface AICorrectionDetail {
   confidence: number
   /** 定位来源：ocr 行框求并集 / vlm 视觉补位。旧数据可能缺失。 */
   box_source?: "ocr" | "vlm"
+  /**
+   * 题型分类，决定前端如何标注出错位置：
+   * - objective：客观题（填空/选择/判断）→ 题号旁贴标签，不画框
+   * - subjective：主观题/作文/解答 → 行级波浪下划线，不画框
+   * 旧数据可能缺失，缺失时按 subjective 处理（更通用、更轻）。
+   */
+  question_type?: "objective" | "subjective"
 }
 
 export interface AIRadarAnalysis {
@@ -211,6 +218,8 @@ export interface ViewerBox {
   rubric_dimension?: RubricDimension
   /** 定位来源：ocr 行框 / vlm 视觉补位，用于前端区分渲染 */
   box_source?: "ocr" | "vlm"
+  /** 题型：objective→标签标注，subjective→波浪下划线。缺失按 subjective 处理。 */
+  question_type?: "objective" | "subjective"
 }
 
 export function toViewerBoxes(field: AIIssuesField | null | undefined): ViewerBox[] {
@@ -235,6 +244,7 @@ export function toViewerBoxes(field: AIIssuesField | null | undefined): ViewerBo
           score_delta: d.score_delta,
           rubric_dimension: d.rubric_dimension,
           box_source: d.box_source,
+          question_type: d.question_type,
         }
       })
   }

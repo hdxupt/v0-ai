@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils"
 import type { ViewerBox } from "@/lib/types"
 import { formatDateTime } from "@/lib/format"
 import { toFileSrc } from "@/lib/blob-url"
+import { WavyUnderline } from "@/components/grading/annotation-marker"
 
 /**
  * 按 bbox type 选样式。
@@ -215,6 +216,9 @@ export function GradingImageViewer({
                 vert === "middle" && "top-1/2 -translate-y-1/2",
               )
 
+              // 客观题（填空/选择/判断）：题号旁贴标签，不画框；主观题：行级波浪下划线
+              const isObjective = box.question_type === "objective"
+
               return (
                 <div
                   key={box.id}
@@ -226,28 +230,32 @@ export function GradingImageViewer({
                     height: `${box.h}%`,
                   }}
                 >
-                  <div
-                    className={cn(
-                      "absolute inset-0 border-2 rounded animate-in fade-in zoom-in duration-300",
-                      // VLM 视觉补位框用虚线，OCR 行框用实线，让老师一眼区分两类定位来源
-                      box.box_source === "vlm" && "border-dashed",
-                      style.border,
-                      style.bg,
-                    )}
-                  />
-                  <div
-                    className={cn(
-                      "absolute -top-2 -left-2 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-semibold shadow-md",
-                      style.pill,
-                    )}
-                  >
-                    {box.index ?? idx + 1}
-                  </div>
-                  {box.box_source === "vlm" ? (
-                    <div className="absolute -top-2 left-4 px-1 h-4 rounded-sm bg-foreground/80 text-background text-[9px] font-medium flex items-center shadow-sm whitespace-nowrap">
-                      AI 定位
+                  {isObjective ? (
+                    /* 客观题：仅在出错位置贴一个标签（题号 + 类型），一眼定位、不遮挡作答 */
+                    <div
+                      className={cn(
+                        "absolute -top-2.5 left-0 inline-flex items-center gap-1 px-1.5 h-5 rounded-full text-[10px] font-semibold shadow-md whitespace-nowrap animate-in fade-in zoom-in duration-300",
+                        style.pill,
+                      )}
+                    >
+                      <span>{box.index ?? idx + 1}</span>
+                      <Icon className="w-2.5 h-2.5" />
+                      <span>{style.label}</span>
                     </div>
-                  ) : null}
+                  ) : (
+                    /* 主观题/解答：行级波浪下划线 + 题号小圆点，柔和锚定出错那一行 */
+                    <>
+                      <WavyUnderline type={box.type} />
+                      <div
+                        className={cn(
+                          "absolute -top-2 -left-2 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-semibold shadow-md animate-in fade-in zoom-in duration-300",
+                          style.pill,
+                        )}
+                      >
+                        {box.index ?? idx + 1}
+                      </div>
+                    </>
+                  )}
                   <div
                     className={cn(
                       "absolute z-20 w-[min(280px,42vw)] min-w-[180px] p-2 rounded-md shadow-lg border bg-card",
@@ -305,8 +313,22 @@ export function GradingImageViewer({
           <Legend dot="bg-emerald-500" label="亮点" />
           <Legend dot="bg-muted-foreground" label="漏做" />
           <span className="inline-flex items-center gap-1">
-            <span className="w-3 h-2 rounded-sm border border-dashed border-foreground/60" />
-            虚线 = AI 视觉补位定位
+            <span className="px-1 h-3 rounded-full bg-destructive" />
+            标签 = 客观题
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <span
+              className="w-4 h-1.5"
+              style={{
+                backgroundImage: `url("data:image/svg+xml,${encodeURIComponent(
+                  "<svg xmlns='http://www.w3.org/2000/svg' width='14' height='6' viewBox='0 0 14 6'><path d='M0 4 Q3.5 0.5 7 4 T14 4' fill='none' stroke='%23dc2626' stroke-width='1.6'/></svg>",
+                )}")`,
+                backgroundRepeat: "repeat-x",
+                backgroundPosition: "left center",
+                backgroundSize: "14px 6px",
+              }}
+            />
+            波浪线 = 主观题
           </span>
         </div>
       </div>

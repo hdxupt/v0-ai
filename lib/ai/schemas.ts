@@ -92,6 +92,12 @@ export const CorrectionDetailSchema = z.object({
    * 前端据此区分渲染（实线 vs 虚线 + "AI 定位"标签）。
    */
   box_source: z.enum(["ocr", "vlm"]).optional().describe("定位来源：ocr 行框 / vlm 视觉补位"),
+  /**
+   * （服务端填写，模型无需输出）题型分类，决定前端标注方式：
+   * - "objective"：客观题（填空/选择/判断）→ 题号旁贴标签，不画框；
+   * - "subjective"：主观题/作文/解答 → 行级波浪下划线，不画框。
+   */
+  question_type: z.enum(["objective", "subjective"]).optional().describe("题型：objective / subjective"),
 })
 export type CorrectionDetail = z.infer<typeof CorrectionDetailSchema>
 
@@ -164,7 +170,7 @@ export const PracticeQuestionSchema = z.object({
 export type PracticeQuestion = z.infer<typeof PracticeQuestionSchema>
 
 export const PracticeSetResultSchema = z.object({
-  basis: z.string().min(2).max(60).describe("本组练习针对的薄弱点摘要，用于标题展示"),
+  basis: z.string().min(2).max(60).describe("本组练习针对的薄弱点���要，用于标题展示"),
   questions: z.preprocess(
     parseMaybeJsonString,
     z.array(PracticeQuestionSchema).min(1).max(5).describe("2~3 道变式题最佳"),

@@ -16,6 +16,7 @@ import { AnnotationDetailList } from "@/components/student/annotation-detail-lis
 import { ScoreProvenance } from "@/components/grading/score-provenance"
 import { PracticeSetPanel } from "@/components/student/practice-set"
 import { OcrTranscriptPanel, type TranscriptAnnotation } from "@/components/grading/ocr-transcript-panel"
+import { WavyUnderline } from "@/components/grading/annotation-marker"
 
 export function SubmissionResult({ submission, task }: { submission: Submission; task: Task }) {
   const isGraded = submission.status === "graded"
@@ -300,55 +301,69 @@ function ImageGallery({
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={toFileSrc(src)} alt="答卷图片" className="w-full h-full object-contain" />
         {/* Render AI issue boxes only on first image for simplicity */}
-        {activeIdx === 0 &&
-          annotations?.map((box, idx) => {
-            const isActive = activeBoxId === box.id
-            const baseColor =
-              box.type === "error" || box.type === "missing"
-                ? "border-destructive bg-destructive/15"
-                : box.type === "highlight"
-                  ? "border-emerald-500 bg-emerald-500/15"
-                  : "border-[color:var(--warning)] bg-[color:var(--warning)]/15"
-            const activeColor =
-              box.type === "error" || box.type === "missing"
-                ? "border-destructive bg-destructive/30 shadow-lg shadow-destructive/40"
-                : box.type === "highlight"
-                  ? "border-emerald-500 bg-emerald-500/30 shadow-lg shadow-emerald-500/40"
-                  : "border-[color:var(--warning)] bg-[color:var(--warning)]/30 shadow-lg shadow-[color:var(--warning)]/40"
-            const dot =
-              box.type === "error" || box.type === "missing"
-                ? "bg-destructive"
-                : box.type === "highlight"
-                  ? "bg-emerald-500"
-                  : "bg-[color:var(--warning)]"
-            return (
-              <div
-                key={box.id}
-                onMouseEnter={() => onHoverBox?.(box.id)}
-                onMouseLeave={() => onHoverBox?.(null)}
-                className={cn(
-                  "absolute rounded-sm cursor-pointer transition-all duration-200",
-                  isActive ? `border-[3px] ${activeColor} scale-[1.02] z-10` : `border-2 ${baseColor}`,
-                )}
-                style={{
-                  left: `${box.x}%`,
-                  top: `${box.y}%`,
-                  width: `${box.w}%`,
-                  height: `${box.h}%`,
-                }}
-              >
-                <span
+          {activeIdx === 0 &&
+            annotations?.map((box, idx) => {
+              const isActive = activeBoxId === box.id
+              const isObjective = box.question_type === "objective"
+              const dot =
+                box.type === "error" || box.type === "missing"
+                  ? "bg-destructive"
+                  : box.type === "highlight"
+                    ? "bg-emerald-500"
+                    : "bg-[color:var(--warning)]"
+              const label =
+                box.type === "error"
+                  ? "错误"
+                  : box.type === "missing"
+                    ? "漏做"
+                    : box.type === "highlight"
+                      ? "亮点"
+                      : "半对"
+              return (
+                <div
+                  key={box.id}
+                  onMouseEnter={() => onHoverBox?.(box.id)}
+                  onMouseLeave={() => onHoverBox?.(null)}
                   className={cn(
-                    "absolute -top-1.5 -left-1.5 rounded-full text-[9px] font-semibold text-white flex items-center justify-center shadow transition-all",
-                    dot,
-                    isActive ? "w-5 h-5 text-[10px] ring-2 ring-background" : "w-4 h-4",
+                    "absolute cursor-pointer transition-all duration-200",
+                    isActive && "z-10",
                   )}
+                  style={{
+                    left: `${box.x}%`,
+                    top: `${box.y}%`,
+                    width: `${box.w}%`,
+                    height: `${box.h}%`,
+                  }}
                 >
-                  {idx + 1}
-                </span>
-              </div>
-            )
-          })}
+                  {isObjective ? (
+                    /* 客观题：题号 + 类型标签，不画框 */
+                    <span
+                      className={cn(
+                        "absolute -top-2.5 left-0 inline-flex items-center gap-0.5 px-1.5 h-5 rounded-full text-[9px] font-semibold text-white shadow whitespace-nowrap transition-all",
+                        dot,
+                        isActive && "ring-2 ring-background scale-105",
+                      )}
+                    >
+                      {idx + 1} {label}
+                    </span>
+                  ) : (
+                    /* 主观题：行级波浪下划线 + 题号小圆点 */
+                    <>
+                      <WavyUnderline type={box.type} active={isActive} />
+                      <span
+                        className={cn(
+                          "absolute -top-1.5 -left-1.5 rounded-full text-[9px] font-semibold text-white flex items-center justify-center shadow transition-all",
+                          dot,
+                          isActive ? "w-5 h-5 text-[10px] ring-2 ring-background" : "w-4 h-4",
+                        )}
+                      >
+                        {idx + 1}
+                      </span>
+                    </>
+                  )}
+                </div>
+              )
+            })}
       </div>
       {pathnames.length > 1 && (
         <div className="flex gap-2 overflow-x-auto">

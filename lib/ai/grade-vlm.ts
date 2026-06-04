@@ -165,6 +165,9 @@ async function gradeBlock(
   const issues = Array.isArray(result?.issues) ? result.issues : []
   const out: Omit<CorrectionDetail, "id">[] = []
 
+  // 题型分类：客观题（填空/选择/判断）→ 标签标注；其余 → 波浪下划线
+  const questionType: "objective" | "subjective" = block.type === "objective" ? "objective" : "subjective"
+
   for (const it of issues) {
     // 局部坐标（相对小图，1000网格→局部百分比）
     let globalBox: RegionPct | null = null
@@ -189,6 +192,7 @@ async function gradeBlock(
       line_indexes: [1], // 占位：新链路不依赖 OCR 行号，bbox 直接给
       bounding_box: globalBox,
       box_source: boxSource,
+      question_type: questionType,
       page_index: block.page_index,
       confidence: typeof it.confidence === "number" ? Math.max(0, Math.min(1, it.confidence)) : 0.8,
     })

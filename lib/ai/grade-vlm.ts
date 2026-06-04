@@ -94,7 +94,10 @@ function blockGradePrompt(type: BlockType, subjectHint: string, answerCtx?: stri
     ? `\n【教师标准答案与得分点（权威参照，严格据此判分）】\n${answerCtx}\n务必对照上述标准答案逐条核对，按关键得分点判断对错与扣分；与标准不一致即为错误。\n`
     : ""
 
-  const COMMON_TAIL = `${ANSWER_BLOCK}
+  // 通用抗干扰指令：隔绝纸张背景与无关杂物，只判作答本身
+  const NOISE_GUARD = `【看图须知】只针对学生的"作答内容"判分。请主动忽略：纸张阴影/折痕、背面透出的笔迹、扫描噪点、装订线/打印框线、与本题作答无关的涂鸦或污渍。若某处是上述杂物而非作答，不要当作错误。`
+
+  const COMMON_TAIL = `${NOISE_GUARD}${ANSWER_BLOCK}
 对每一处问题输出一个对象：
 - "type": "error"(错) | "partial"(半对) | "highlight"(亮点) | "missing"(漏做)
 - "question_text": 简要题干或学生原句（≤40字）
@@ -123,6 +126,7 @@ ${COMMON_TAIL}`
     case "objective":
     default:
       return `你是资深${subjectHint}老师，正在批改这部分客观题（填空/选择/判断，图为裁剪图）。
+判分规则（重要）：客观题只看三样东西——【题干】【选项或填空处的最终作答】【对错】。学生在题目旁边写的演算过程、草稿、列竖式、辅助计算等，一律忽略，不参与判分、不指出错误（客观题只认最终答案对不对，过程不扣分）。
 请判断每小题对错，找出做错的题并给出正确答案；定位到该小题所在行即可。
 ${COMMON_TAIL}`
   }

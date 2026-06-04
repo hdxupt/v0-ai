@@ -35,6 +35,18 @@ export async function fetchImageBuffer(pathnameOrUrl: string): Promise<Buffer> {
   return out
 }
 
+/**
+ * 背景归一化：压平纸张阴影、背面透字、扫描噪点，让作答内容更清晰。
+ * 设计原则——"温和"，宁可少处理也不要把浅色笔迹一起抹掉：
+ *  - normalize：拉伸明暗对比，把灰蒙蒙的纸张背景推向纯白、笔迹推向更深；
+ *  - median(1)：去掉孤立的椒盐噪点/透背小点，对连续笔画几乎无损；
+ *  - 保留彩色（不强制灰度），避免丢失红笔订正等信息。
+ * 任一步异常则原样返回，绝不因预处理失败而中断批改。
+ */
+function denoisePipeline(input: sharp.Sharp): sharp.Sharp {
+  return input.median(1).normalize()
+}
+
 /** 题块在原图中的区域（百分比 0~100，[y, x, h, w]） */
 export type RegionPct = [number, number, number, number]
 
@@ -89,8 +101,7 @@ export async function cropRegionFromBuffer(
     const width = Math.max(1, Math.round((wPct / 100) * W))
     const height = Math.max(1, Math.round((hPct / 100) * H))
 
-    const cropped = await img
-      .extract({ left, top, width, height })
+    const cropped = await denoisePipeline(img.extract({ left, top, width, height }))
       .jpeg({ quality: 90, mozjpeg: true })
       .toBuffer()
 
@@ -135,8 +146,13 @@ export function localBoxToGlobal(
 /** 把已下载的原图 Buffer 压成 data URL（控制 token），用于分块阶段。 */
 export async function bufferToDataUrl(buf: Buffer): Promise<string> {
   // 统一压成 jpeg，控制 token；长边超过 2000 缩放（VL 对超大图收费高且无收益）
-  const out = await sharp(buf, { limitInputPixels: false })
-    .resize(2000, 2000, { fit: "inside", withoutEnlargement: true })
+  // 同时做背景归一化，压平纸张阴影/透背，让分块与批改更准
+  const out = await denoisePipeline(
+    sharp(buf, { limitInputPixels: false }).resize(2000, 2000, {
+      fit: "inside",
+      withoutEnlargement: true,
+    }),
+  )
     .jpeg({ quality: 88, mozjpeg: true })
     .toBuffer()
   return `data:image/jpeg;base64,${out.toString("base64")}`

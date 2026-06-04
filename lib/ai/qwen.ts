@@ -122,10 +122,75 @@ export function parseLooseJSON<T = unknown>(raw: string): T {
 
     if (start !== -1 && end !== -1 && end > start) {
       const sliced = s.slice(start, end + 1)
-      return JSON.parse(sliced) as T
+      try {
+        return JSON.parse(sliced) as T
+      } catch {
+        // 落到下面的截断恢复
+      }
+    }
+
+    // 截断恢复：VLM 输出被 max_tokens 砍断时，JSON 不完整。
+    // 用括号配平扫描，在「最后一个完整闭合括号」处截断，再补齐未闭合的括号，
+    // 从而保住已经完整输出的数组元素（如 issues 列表的前几条），避免整块归零。
+    const repaired = repairTruncatedJSON(start !== -1 ? s.slice(start) : s)
+    if (repaired) {
+      try {
+        return JSON.parse(repaired) as T
+      } catch {
+        // ignore
+      }
     }
     throw new Error(`无法解析 Qwen JSON 输出: ${raw.slice(0, 200)}`)
   }
+}
+
+/**
+ * 修复被截断的 JSON 字符串。
+ * 扫描时跟踪字符串/转义状态与括号栈，记录最后一个「安全截断点」
+ * （即栈处于某层数组/对象内、刚完成一个元素的位置），在该点截断并补齐闭合括号。
+ * 返回可被 JSON.parse 的字符串；无法修复时返回 null。
+ */
+export function repairTruncatedJSON(input: string): string | null {
+  const s = input
+  let inStr = false
+  let esc = false
+  const stack: string[] = [] // '{' or '['
+  // 安全截断点：在数组/对象内部刚完成一个元素（遇到完整的 } ] 或者其后的 ,）的索引
+  let safeEnd = -1
+  let safeStack: string[] = []
+
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i]
+    if (inStr) {
+      if (esc) esc = false
+      else if (c === "\\") esc = true
+      else if (c === '"') inStr = false
+      continue
+    }
+    if (c === '"') {
+      inStr = true
+    } else if (c === "{" || c === "[") {
+      stack.push(c)
+    } else if (c === "}" || c === "]") {
+      stack.pop()
+      // 一个元素/容器刚闭合，是安全点
+      safeEnd = i
+      safeStack = [...stack]
+    } else if (c === ",") {
+      // 逗号前的元素已完整，也是安全点（截断时丢掉逗号）
+      safeEnd = i - 1
+      safeStack = [...stack]
+    }
+  }
+
+  if (safeEnd < 0 || safeStack.length === 0) return null
+
+  let head = s.slice(0, safeEnd + 1)
+  // 补齐未闭合的括号（从栈顶到栈底）
+  for (let i = safeStack.length - 1; i >= 0; i--) {
+    head += safeStack[i] === "{" ? "}" : "]"
+  }
+  return head
 }
 
 /**

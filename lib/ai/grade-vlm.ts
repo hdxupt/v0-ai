@@ -92,8 +92,8 @@ function blockGradePrompt(type: BlockType, subjectHint: string): string {
   const COMMON_TAIL = `
 对每一处问题输出一个对象：
 - "type": "error"(错) | "partial"(半对) | "highlight"(亮点) | "missing"(漏做)
-- "question_text": 简要题干或学生原句（≤80字）
-- "process_analysis": 名师级解析，具体到步骤/公式/词汇（≤300字）
+- "question_text": 简要题干或学生原句（≤40字）
+- "process_analysis": 精炼解析，一针见血指出错在哪、为何错（≤120字，不要长篇大论）
 - "correct_answer": 正确做法/正确答案（可选）
 - "score_delta": 该项扣/加分整数。error/partial/missing 给负数（如 -3），highlight 给 0
 - "rubric_dimension": basics(计算基础)|logic(逻辑)|knowledge(知识)|application(应用)|presentation(书写) 之一
@@ -149,7 +149,7 @@ async function gradeBlock(
   try {
     result = await callQwenJSON<BlockGradeResult>(messages, {
       temperature: 0,
-      maxTokens: 1800,
+      maxTokens: 3200,
     })
   } catch (e: any) {
     console.error("[v0] gradeBlock failed, block", block.index, e?.message)
@@ -157,6 +157,16 @@ async function gradeBlock(
   }
 
   const issues = Array.isArray(result?.issues) ? result.issues : []
+  console.log(
+    "[v0] gradeBlock done block",
+    block.index,
+    "type",
+    block.type,
+    "region",
+    JSON.stringify(block.region),
+    "→ issues:",
+    issues.length,
+  )
   const out: Omit<CorrectionDetail, "id">[] = []
 
   for (const it of issues) {

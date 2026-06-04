@@ -147,6 +147,8 @@ export async function createTask(
     status?: Task["status"]
   },
 ): Promise<Task> {
+  // 过滤空班级 id，避免 [null,"c1"] 这类脏数据写入（会导致教师端统计取错班级）
+  task = { ...task, class_ids: (task.class_ids ?? []).filter((c): c is string => Boolean(c)) }
   // Calculate target_student_count
   const { data: students } = await supabase()
     .from("app_users")

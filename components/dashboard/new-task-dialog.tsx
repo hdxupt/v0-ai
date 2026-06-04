@@ -43,7 +43,9 @@ export function NewTaskDialog({
   // Form state
   const [title, setTitle] = useState("")
   const [subject, setSubject] = useState("数学")
-  const [classIds, setClassIds] = useState<string[]>([teacher.class_id ?? classes[0]?.id])
+  const [classIds, setClassIds] = useState<string[]>(
+    [teacher.class_id ?? classes[0]?.id].filter((c): c is string => Boolean(c)),
+  )
   const [requirements, setRequirements] = useState("")
   const [notes, setNotes] = useState("")
   const [dueDate, setDueDate] = useState(() => {

@@ -11,8 +11,8 @@ import { createClient } from "./supabase/server"
 
 /** AI 单份批改实测均值（秒）。基于 Vision 模型实际批改观测，含多页拼接。 */
 export const AI_SECONDS_PER_PAPER = 25
-/** 传统人工精批单份均值（秒）。按一线教师经验：约 5 分钟/份（含逐题找错、写评语、登记成绩）。 */
-export const MANUAL_SECONDS_PER_PAPER = 300
+/** 传统人工精批单份均值（秒）。按一线教师经验：约 4 分钟/份（含找错、写评语、记录）。 */
+export const MANUAL_SECONDS_PER_PAPER = 240
 /** AI 单份直接成本（元）。按 Vision 模型 token 用量估算。 */
 export const AI_COST_PER_PAPER = 0.18
 /** 外推场景：一个班学生数 */

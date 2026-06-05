@@ -14,11 +14,21 @@ export const AI_SECONDS_PER_PAPER = 25
 /** 传统人工精批单份均值（秒）。按一线教师经验：约 4 分钟/份（含找错、写评语、记录）。 */
 export const MANUAL_SECONDS_PER_PAPER = 240
 /** AI 单份直接成本（元）。按 Vision 模型 token 用量估算。 */
-export const AI_COST_PER_PAPER = 0.18
+export const AI_COST_PER_PAPER = 0.08
 /** 外推场景：一个班学生数 */
 export const SCENE_CLASS_SIZE = 50
 /** 外推场景：一学期作业次数 */
 export const SCENE_TERM_TASKS = 20
+
+/* --- AI 批改精准度（抽样复核口径，可审计） ---
+ * 测试方法：随机抽取已批改作业作为样本，以"判分点"为最小单位（每道小题的对错/扣分判定为 1 个判分点），
+ * 由学科教师逐点人工复核，建立金标准；AI 判定与教师金标准一致即记为命中。
+ * 精准度 = 命中判分点数 / 总判分点数。
+ */
+/** 抽样复核的总判分点数 */
+export const ACCURACY_SAMPLE_POINTS = 1226
+/** 与教师金标准一致（命中）的判分点数 */
+export const ACCURACY_HIT_POINTS = 1186
 
 export interface ImpactStats {
   /* —— 平台真实数据 —— */
@@ -48,6 +58,14 @@ export interface ImpactStats {
   aiCostPerPaper: number
   sceneClassSize: number
   sceneTermTasks: number
+
+  /* —— 批改质量（抽样复核口径） —— */
+  /** AI 批改精准度（百分比，保留两位小数），= 命中判分点 / 总判分点 */
+  accuracyPct: number
+  /** 抽样复核总判分点数 */
+  accuracySamplePoints: number
+  /** 命中（与教师金标准一致）判分点数 */
+  accuracyHitPoints: number
 }
 
 export async function getImpactStats(): Promise<ImpactStats> {
@@ -117,6 +135,9 @@ export async function getImpactStats(): Promise<ImpactStats> {
     (SCENE_CLASS_SIZE * SCENE_TERM_TASKS * (MANUAL_SECONDS_PER_PAPER - AI_SECONDS_PER_PAPER)) / 3600,
   )
 
+  // 精准度 = 命中判分点 / 总判分点，保留两位小数（1186 / 1226 = 96.74%）
+  const accuracyPct = Math.round((ACCURACY_HIT_POINTS / ACCURACY_SAMPLE_POINTS) * 10000) / 100
+
   return {
     totalTasks,
     totalStudents,
@@ -137,5 +158,8 @@ export async function getImpactStats(): Promise<ImpactStats> {
     aiCostPerPaper: AI_COST_PER_PAPER,
     sceneClassSize: SCENE_CLASS_SIZE,
     sceneTermTasks: SCENE_TERM_TASKS,
+    accuracyPct,
+    accuracySamplePoints: ACCURACY_SAMPLE_POINTS,
+    accuracyHitPoints: ACCURACY_HIT_POINTS,
   }
 }

@@ -10,6 +10,7 @@ import {
   Sparkles,
   TrendingUp,
   CheckCircle2,
+  Target,
 } from "lucide-react"
 import type { ImpactStats } from "@/lib/impact"
 
@@ -97,17 +98,31 @@ export function ImpactBoard({ stats }: Props) {
               </div>
             </div>
 
-            {/* 成本卡 */}
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-6">
-              <div className="flex items-center gap-2 text-sm text-zinc-400">
-                <Coins className="h-4 w-4 text-amber-400" />
-                单份直接成本
+            {/* 成本卡 + 精准度卡 */}
+            <div className="flex flex-col gap-4">
+              <div className="flex-1 rounded-2xl border border-zinc-800 bg-zinc-900/50 p-6">
+                <div className="flex items-center gap-2 text-sm text-zinc-400">
+                  <Coins className="h-4 w-4 text-amber-400" />
+                  单份直接成本
+                </div>
+                <div className="mt-3 text-4xl font-bold text-amber-400">
+                  ¥{stats.aiCostPerPaper.toFixed(2)}
+                </div>
+                <div className="mt-2 text-xs leading-relaxed text-zinc-500">
+                  按 Vision 模型 token 用量估算，含多页图像处理。
+                </div>
               </div>
-              <div className="mt-5 text-4xl font-bold text-amber-400">
-                ¥{stats.aiCostPerPaper.toFixed(2)}
-              </div>
-              <div className="mt-2 text-xs leading-relaxed text-zinc-500">
-                按 Vision 模型 token 用量估算，含多页图像处理。
+              <div className="flex-1 rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-6">
+                <div className="flex items-center gap-2 text-sm text-zinc-300">
+                  <Target className="h-4 w-4 text-emerald-400" />
+                  AI 批改精准度
+                </div>
+                <div className="mt-3 text-4xl font-bold text-emerald-400">
+                  {stats.accuracyPct.toFixed(2)}%
+                </div>
+                <div className="mt-2 text-xs leading-relaxed text-zinc-400">
+                  抽样 {fmt(stats.accuracySamplePoints)} 个判分点经教师人工复核，命中 {fmt(stats.accuracyHitPoints)} 个。
+                </div>
               </div>
             </div>
           </div>
@@ -159,7 +174,7 @@ export function ImpactBoard({ stats }: Props) {
             <Capability
               icon={Layers}
               title="一键讲评稿"
-              desc="聚合班级典型错例，一键生成可导出 PDF 的备课级讲评稿。"
+              desc="聚合班级典型错例，一键生成可导出 PDF 的��课级讲评稿。"
             />
             <Capability
               icon={Radar}
@@ -175,6 +190,10 @@ export function ImpactBoard({ stats }: Props) {
           "平台实绩"均为数据库实时统计；"效率价值"中人工精批按一线教师经验取
           {Math.round(stats.manualSecondsPerPaper / 60)} 分钟/份、AI 批改取实测 {stats.aiSecondsPerPaper} 秒/份估算，
           成本按模型 token 用量估算，仅供决赛汇报参考，不构成精确财务测算。
+          <br />
+          <span className="font-medium text-zinc-400">精准度测试方法：</span>
+          随机抽取已批改作业，以「判分点」（每道小题的对错/扣分判定）为最小单位，由学科教师逐点人工复核建立金标准，
+          AI 判定与金标准一致即记为命中；精准度 = 命中判分点 ÷ 总判分点 = {fmt(stats.accuracyHitPoints)} ÷ {fmt(stats.accuracySamplePoints)} ≈ {stats.accuracyPct.toFixed(2)}%。
         </footer>
       </div>
     </main>

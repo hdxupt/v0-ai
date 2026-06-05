@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SeWise · 方案架构</title>
+<style>
+  :root{
+    --ink:#0f2a33;          /* 主墨色 */
+    --teal:#0d7a82;         /* 主青色 */
+    --teal-soft:#e3f1f1;    /* 浅青底 */
+    --amber:#d97706;        /* 强调橙 */
+    --amber-soft:#fdf0e1;
+    --line:#d4dde0;
+    --bg:#f5f8f8;
+    --card:#ffffff;
+    --muted:#5a6b70;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--bg);color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+  }
+  .slide{
+    display:none;width:100vw;height:100vh;padding:3.2vh 3.4vw;
+    flex-direction:column;
+  }
+  .slide.active{display:flex;}
+  .head{display:flex;align-items:baseline;gap:.9vw;margin-bottom:2vh;flex-shrink:0;}
+  .head .kicker{font-size:1.05vw;font-weight:700;color:var(--teal);letter-spacing:.18em;}
+  .head h1{font-size:2.1vw;font-weight:800;letter-spacing:.01em;}
+  .head .sub{font-size:1vw;color:var(--muted);margin-left:auto;}
+
+  /* ===== 通用卡片/节点 ===== */
+  .node{
+    background:var(--card);border:1.5px solid var(--line);border-radius:12px;
+    padding:1.1vh 1vw;display:flex;flex-direction:column;gap:.4vh;
+    box-shadow:0 1px 3px rgba(15,42,51,.05);
+  }
+  .node .t{font-size:1.05vw;font-weight:700;display:flex;align-items:center;gap:.4vw;}
+  .node .d{font-size:.82vw;color:var(--muted);line-height:1.45;}
+  .node .ico{width:1.4vw;height:1.4vw;flex-shrink:0;color:var(--teal);}
+  .badge{font-size:.72vw;font-weight:700;padding:.15vh .5vw;border-radius:6px;display:inline-block;}
+  .badge.qwen{background:var(--teal-soft);color:var(--teal);}
+  .badge.alt{background:var(--amber-soft);color:var(--amber);}
+  .badge.algo{background:#eef1f2;color:var(--muted);}
+
+  /* ===== 第1屏 数据流 ===== */
+  .flow{flex:1;display:flex;flex-direction:column;gap:1.6vh;min-height:0;}
+  .row{display:flex;align-items:stretch;gap:.8vw;}
+  .row .node{flex:1;justify-content:center;}
+  .arrow{display:flex;align-items:center;justify-content:center;color:var(--teal);flex-shrink:0;font-size:1.5vw;font-weight:800;}
+  .arrow.down{justify-content:center;width:100%;height:2.2vh;}
+
+  .corelane{
+    border:2px solid var(--teal);border-radius:var(--radius);
+    background:linear-gradient(180deg,#ffffff,#f2fafa);
+    padding:1.4vh 1.2vw;position:relative;flex:1;display:flex;flex-direction:column;gap:1vh;min-height:0;
+  }
+  .corelane .lane-label{
+    position:absolute;top:-1.1vh;left:1.2vw;background:var(--teal);color:#fff;
+    font-size:.78vw;font-weight:700;padding:.2vh .7vw;border-radius:6px;letter-spacing:.05em;
+  }
+  .core-stages{display:flex;align-items:stretch;gap:.7vw;flex:1;min-height:0;}
+  .core-stages .node{flex:1;justify-content:center;gap:.7vh;}
+  .core-stages .node .d{font-size:.9vw;}
+  .stage-no{font-size:.78vw;font-weight:800;color:var(--teal);letter-spacing:.1em;}
+
+  .fallback{
+    border:1.6px dashed var(--amber);border-radius:12px;background:var(--amber-soft);
+    padding:1.1vh 1.1vw;display:flex;align-items:center;gap:.8vw;
+  }
+  .fallback .fb-label{font-size:.78vw;font-weight:800;color:var(--amber);writing-mode:vertical-rl;letter-spacing:.1em;flex-shrink:0;}
+  .fallback .fb-nodes{display:flex;gap:.6vw;flex:1;}
+  .fallback .node{flex:1;border-color:#f0d9b8;background:#fff;}
+
+  .endrow .node{flex:1;}
+
+  /* ===== 第2屏 技术选型 ===== */
+  .stack{flex:1;display:flex;flex-direction:column;gap:1.4vh;min-height:0;}
+  .layer{display:flex;align-items:stretch;gap:.8vw;flex:1;min-height:0;}
+  .layer .node{justify-content:center;}
+  .layer .ltitle{
+    width:9vw;flex-shrink:0;border-radius:12px;color:#fff;
+    display:flex;flex-direction:column;justify-content:center;padding:0 1vw;gap:.3vh;
+  }
+  .layer .ltitle .lt{font-size:1.15vw;font-weight:800;}
+  .layer .ltitle .ls{font-size:.72vw;opacity:.85;}
+  .layer .items{flex:1;display:flex;gap:.7vw;}
+  .layer .items .node{flex:1;}
+  .l-ai .ltitle{background:var(--teal);}
+  .l-fe .ltitle{background:#1f4e57;}
+  .l-data .ltitle{background:#2a6168;}
+  .l-infra .ltitle{background:#3d7780;}
+  .why{font-size:.78vw;color:var(--amber);font-weight:600;margin-top:.4vh;padding-left:.7vw;border-left:2.5px solid var(--amber);line-height:1.4;}
+
+  /* footer / nav */
+  .foot{display:flex;align-items:center;gap:1vw;margin-top:1.6vh;flex-shrink:0;font-size:.8vw;color:var(--muted);}
+  .legend{display:flex;gap:1vw;align-items:center;}
+  .legend span{display:flex;align-items:center;gap:.35vw;}
+  .dotline{width:1.4vw;height:0;border-top:2px solid var(--teal);}
+  .dotline.dash{border-top:2px dashed var(--amber);}
+  .pageno{margin-left:auto;font-weight:700;color:var(--ink);}
+  .nav{position:fixed;bottom:2vh;right:2vw;display:flex;gap:.5vw;z-index:20;}
+  .nav button{
+    border:1.5px solid var(--line);background:#fff;color:var(--ink);border-radius:8px;
+    padding:.6vh 1vw;font-size:.85vw;cursor:pointer;font-weight:600;
+  }
+  .nav button:hover{border-color:var(--teal);color:var(--teal);}
+  .hint{position:fixed;bottom:2vh;left:2vw;font-size:.75vw;color:var(--muted);z-index:20;}
+</style>
+</head>
+<body>
+
+<!-- ============ 第1屏：整体数据流架构 ============ -->
+<section class="slide active" id="s1">
+  <div class="head">
+    <span class="kicker">方案讲解 · 01</span>
+    <h1>整体架构 — 作业批改全链路数据流</h1>
+    <span class="sub">默认链路单模型驱动 · 兜底链路自动回退</span>
+  </div>
+
+  <div class="flow">
+    <!-- 输入行 -->
+    <div class="row">
+      <div class="node">
+        <div class="t"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>学生多页上传</div>
+        <div class="d">手机/学习机端拍照提交，支持多页作业</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node">
+        <div class="t"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0018 0V5"/></svg>Vercel Blob 存储</div>
+        <div class="d">原图入对象存储，按页缓存 Buffer 复用</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node" style="flex:1.1;">
+        <div class="t"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>图像预处理 <span class="badge algo">sharp</span></div>
+        <div class="d">背景归一化压平阴影/透背、纠偏、按题块裁剪</div>
+      </div>
+    </div>
+
+    <div class="arrow down">↓</div>
+
+    <!-- 核心链路 -->
+    <div class="corelane">
+      <span class="lane-label">默认链路 · 单模型驱动</span>
+      <div class="core-stages">
+        <div class="node">
+          <div class="stage-no">STAGE 1 · 分块</div>
+          <div class="t">题块切分 + 分类 <span class="badge qwen">Qwen3-VL-Plus</span></div>
+          <div class="d">整页切成题块，分类为客观题 / 数学解答 / 语文作文 / 英语作文 / 其它，输出 1000×1000 网格坐标</div>
+        </div>
+        <div class="arrow">→</div>
+        <div class="node">
+          <div class="stage-no">STAGE 2 · 批改</div>
+          <div class="t">分流裁图批改 <span class="badge qwen">Qwen3-VL-Plus</span></div>
+          <div class="d">每题块裁成小图分别送入，逐块找错并输出错误位置；客观题忽略演算、主观题精定位。并发 4 路、temperature 0</div>
+        </div>
+        <div class="arrow">→</div>
+        <div class="node">
+          <div class="stage-no">STAGE 3 · 聚合</div>
+          <div class="t">评语 + 五维诊断 <span class="badge qwen">Qwen3-VL-Plus</span></div>
+          <div class="d">汇总全部错题，纯文本调用产出四段式评语、五维雷达、班级薄弱点</div>
+        </div>
+      </div>
+
+      <!-- 兜底链路 -->
+      <div class="fallback">
+        <div class="fb-label">异常回退</div>
+        <div class="fb-nodes">
+          <div class="node">
+            <div class="t">高精度 OCR <span class="badge alt">腾讯云 OCR</span></div>
+            <div class="d">GeneralAccurate 手写识别，带行号文本 + 行级 bbox + 倾斜角</div>
+          </div>
+          <div class="arrow" style="color:var(--amber)">→</div>
+          <div class="node">
+            <div class="t">结构化批改 <span class="badge alt">Claude Opus 4.7</span></div>
+            <div class="d">整页图 + OCR 文本结构化输出；行号映射回真实 bbox 精确定位</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow down">↓</div>
+
+    <!-- 输出行 -->
+    <div class="row endrow">
+      <div class="node">
+        <div class="t"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0018 0V5"/></svg>Supabase 落库</div>
+        <div class="d">批改结果、错题、评语、学情数据持久化</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node">
+        <div class="t"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3 8-8"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>教师审核推送</div>
+        <div class="d">老师一键审核而非从零批改，结果推送学生</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node">
+        <div class="t"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="8"/><rect x="12" y="6" width="3" height="12"/><rect x="17" y="13" width="3" height="5"/></svg>班级学情看板</div>
+        <div class="d">五维诊断、薄弱点、错题闭环 <span class="badge alt">变式题 · Claude Sonnet</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <div class="legend">
+      <span><span class="dotline"></span>默认链路（Qwen3-VL-Plus 全程驱动）</span>
+      <span><span class="dotline dash"></span>兜底链路（OCR + Opus，自动回退）</span>
+    </div>
+    <span class="pageno">01 / 02</span>
+  </div>
+</section>
+
+<!-- ============ 第2屏：技术选型分层 ============ -->
+<section class="slide" id="s2">
+  <div class="head">
+    <span class="kicker">方案讲解 · 02</span>
+    <h1>技术选型 — 分层架构与选型依据</h1>
+    <span class="sub">每层一个主选型，配套依据</span>
+  </div>
+
+  <div class="stack">
+    <!-- AI 层 -->
+    <div class="layer l-ai">
+      <div class="ltitle"><span class="lt">AI 模型层</span><span class="ls">批改 · 评语 · 闭环</span></div>
+      <div class="items">
+        <div class="node">
+          <div class="t">Qwen3-VL-Plus <span class="badge qwen">核心</span></div>
+          <div class="d">阿里云百炼，分块/批改/评语全程驱动</div>
+          <div class="why">▸ 中文手写体强、视觉定位准、直连低延迟</div>
+        </div>
+        <div class="node">
+          <div class="t">Claude Opus 4.7 <span class="badge alt">兜底</span></div>
+          <div class="d">新链路异常时结构化批改回退</div>
+          <div class="why">▸ 推理严谨，保证高可用不中断</div>
+        </div>
+        <div class="node">
+          <div class="t">Claude Sonnet 4.5</div>
+          <div class="d">变式题生成 + 班级学情报告</div>
+          <div class="why">▸ 纯文本任务，质量够用且控成本</div>
+        </div>
+        <div class="node">
+          <div class="t">腾讯云 OCR</div>
+          <div class="d">兜底链路高精度手写识别</div>
+          <div class="why">▸ 行级 bbox 支撑精确定位</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 前端层 -->
+    <div class="layer l-fe">
+      <div class="ltitle"><span class="lt">应用层</span><span class="ls">前端 · 交互</span></div>
+      <div class="items">
+        <div class="node">
+          <div class="t">Next.js + React</div>
+          <div class="d">App Router、服务端组件</div>
+          <div class="why">▸ 一套代码覆盖师/生/管三端</div>
+        </div>
+        <div class="node">
+          <div class="t">分题型轻量标注</div>
+          <div class="d">客观题贴标签 / 主观题波浪线</div>
+          <div class="why">▸ 规避大模型坐标漂移</div>
+        </div>
+        <div class="node">
+          <div class="t">五维诊断雷达</div>
+          <div class="d">可视化学情，错题闭环</div>
+          <div class="why">▸ 让学情数据一目了然</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 数据层 -->
+    <div class="layer l-data">
+      <div class="ltitle"><span class="lt">数据层</span><span class="ls">存储 · 鉴权</span></div>
+      <div class="items">
+        <div class="node">
+          <div class="t">Supabase（Postgres）</div>
+          <div class="d">作业、批改、学情数据 + 鉴权</div>
+          <div class="why">▸ 关系型 + 行级安全，开箱即用</div>
+        </div>
+        <div class="node">
+          <div class="t">Vercel Blob</div>
+          <div class="d">作业原图对象存储</div>
+          <div class="why">▸ 大文件托管，按页缓存复用</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 基础设施层 -->
+    <div class="layer l-infra">
+      <div class="ltitle"><span class="lt">部署层</span><span class="ls">运行 · 生态</span></div>
+      <div class="items">
+        <div class="node">
+          <div class="t">Vercel Serverless</div>
+          <div class="d">弹性伸缩、按量计费</div>
+          <div class="why">▸ 零运维，单份成本可控至 ¥0.18</div>
+        </div>
+        <div class="node">
+          <div class="t">希沃魔方 · 数字基座</div>
+          <div class="d">可融入希沃生态软件服务</div>
+          <div class="why">▸ 激活闲置学习机，落地真实校园</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <div class="legend">
+      <span style="font-weight:700;color:var(--amber);padding-left:.7vw;border-left:2.5px solid var(--amber)">橙色文字 = 选型依据</span>
+    </div>
+    <span class="pageno">02 / 02</span>
+  </div>
+</section>
+
+<div class="hint">← → 或空格翻页</div>
+<div class="nav">
+  <button onclick="go(-1)">‹ 上一页</button>
+  <button onclick="go(1)">下一页 ›</button>
+</div>
+
+<script>
+  let i = 0;
+  const slides = document.querySelectorAll('.slide');
+  function show(n){
+    slides.forEach((s,k)=>s.classList.toggle('active', k===n));
+  }
+  function go(d){
+    i = Math.max(0, Math.min(slides.length-1, i+d));
+    show(i);
+  }
+  document.addEventListener('keydown', e=>{
+    if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown'){e.preventDefault();go(1);}
+    if(e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();go(-1);}
+  });
+</script>
+</body>
+</html>

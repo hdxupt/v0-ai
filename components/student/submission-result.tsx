@@ -337,8 +337,9 @@ function ImageGallery({
         <img src={toFileSrc(src)} alt="答卷图片" className="block max-w-full max-h-[75vh] w-auto h-auto" />
         {/* 红笔留痕：逐小题 ✓/✗/半对，跟随学生作答位置（verdicts 自带页码，支持多页） */}
         {verdicts.length > 0 && <RedPenOverlay verdicts={verdicts} pageIndex={activeIdx} />}
-        {/* Render AI issue boxes only on first image for simplicity */}
-          {activeIdx === 0 &&
+        {/* 旧版标签/波浪线：仅在无红笔留痕的旧数据上渲染，避免与 ✓/✗ 双重标注 */}
+          {verdicts.length === 0 &&
+            activeIdx === 0 &&
             annotations?.map((box, idx) => {
               const isActive = activeBoxId === box.id
               const isObjective = box.question_type === "objective"

@@ -99,11 +99,12 @@ export function GradingImageViewer({
 
   const url = imageUrls[currentIndex]
   const total = imageUrls.length
-  // For now annotations are shown only on the first page (model returns 100x100 coords for the first image).
-  // 多图时仍可叠加在第一页，避免错位。
-  const visibleBoxes = currentIndex === 0 && showAnnotations ? boxes : []
   // verdicts 自带 page_index，天然支持多页
   const hasVerdicts = verdicts.length > 0
+  // 有红笔留痕时旧版标签/波浪线完全退出卷面，避免双重标注；
+  // 旧数据（无 verdicts）仍用旧版标记，保持向后兼容。
+  // 旧标记仅显示在第一页（模型对第一张图返回 100x100 坐标）。
+  const visibleBoxes = !hasVerdicts && currentIndex === 0 && showAnnotations ? boxes : []
 
   return (
     <div className="flex flex-col h-full bg-muted/40 border-r border-border">
@@ -332,7 +333,7 @@ export function GradingImageViewer({
       <div className="flex items-center justify-between px-4 py-2 border-t border-border bg-card text-xs text-muted-foreground">
         {hasVerdicts ? (
           <>
-            <span>红笔留痕跟随作答位置 · 悬停旧版标记可看细节</span>
+            <span>红笔留痕跟随作答位置 · 批改细节见右侧明细</span>
             <div className="flex items-center gap-3 flex-wrap font-medium" style={{ color: "#d13438" }}>
               <span>✓ 对</span>
               <span>✗ 错（附正确答案）</span>

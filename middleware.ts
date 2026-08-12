@@ -9,6 +9,7 @@ const PUBLIC_PATHS = [
   "/grading-demo",
   "/grading-ab",
   "/annotation-preview",
+  "/api/dev", // 开发测试路由（route 内部已在生产环境 404）
 ]
 
 /**

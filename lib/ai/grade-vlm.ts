@@ -149,7 +149,7 @@ ${COMMON_TAIL}`
     case "objective":
     default:
       return `你是资深${subjectHint}老师，正在批改这部分客观题（填空/选择/判断，图为裁剪图）。
-判分规则（重要）：客观题只看三样东西——【题干】【选项或填空处的最终作答】【对错】。学生在题目旁边写的演算过程、草稿、列竖式、辅助计算等，一律忽略，不参与判分、不指出错误（客观题只认最终答案对不对，过程不扣分）。
+判分规则（重要）：客观题只看三样东西——【题干】【选项或填空处的最终作答】【对错】。学生在题目旁边写的演算过程、草稿、��竖式、辅助计算等，一律忽略，不参与判分、不指出错误（客观题只认最终答案对不对，过程不扣分）。
 请判断每小题对错，找出做错的题并给出正确答案；定位到该小题所在行即可。
 ${COMMON_TAIL}`
   }
@@ -390,6 +390,49 @@ async function buildAnswerContext(task: Task): Promise<string | undefined> {
 
 /* ----------------------- 主编排 ----------------------- */
 
+/** 两个作答区 [y,x,h,w]（百分比）的 IoU */
+function verdictIoU(a: [number, number, number, number], b: [number, number, number, number]): number {
+  const [ay, ax, ah, aw] = a
+  const [by, bx, bh, bw] = b
+  const ix = Math.max(0, Math.min(ax + aw, bx + bw) - Math.max(ax, bx))
+  const iy = Math.max(0, Math.min(ay + ah, by + bh) - Math.max(ay, by))
+  const inter = ix * iy
+  const union = ah * aw + bh * bw - inter
+  return union > 0 ? inter / union : 0
+}
+
+/**
+ * 判定空间去重：同页内作答区 IoU ≥ 0.45 视为同一小题被重复判定，
+ * 保留置信度最高的一条（并列时保留更严格的判定，避免漏掉错误）。
+ */
+function dedupeVerdicts(
+  verdicts: Omit<AIQuestionVerdict, "id">[],
+): Omit<AIQuestionVerdict, "id">[] {
+  const severity: Record<VerdictStatus, number> = {
+    wrong: 4,
+    partial: 3,
+    unanswered: 2,
+    uncertain: 1,
+    correct: 0,
+  }
+  const kept: Omit<AIQuestionVerdict, "id">[] = []
+  for (const v of verdicts) {
+    const clashIdx = kept.findIndex(
+      (k) => k.page_index === v.page_index && verdictIoU(k.answer_box, v.answer_box) >= 0.45,
+    )
+    if (clashIdx === -1) {
+      kept.push(v)
+      continue
+    }
+    const k = kept[clashIdx]!
+    const better =
+      v.confidence > k.confidence ||
+      (v.confidence === k.confidence && severity[v.verdict] > severity[k.verdict])
+    if (better) kept[clashIdx] = v
+  }
+  return kept
+}
+
 export async function gradeSubmissionWithVLM(
   submission: Submission,
   task: Task,
@@ -423,19 +466,24 @@ export async function gradeSubmissionWithVLM(
   )
 
   const details: Omit<CorrectionDetail, "id">[] = []
-  const verdictsRaw: Omit<AIQuestionVerdict, "id">[] = []
+  const collected: Omit<AIQuestionVerdict, "id">[] = []
   for (const r of blockResults) {
     if (r.ok) {
       details.push(...r.value.details)
-      verdictsRaw.push(...r.value.verdicts)
+      collected.push(...r.value.verdicts)
     }
   }
+  // 空间去重：相邻题块可能把同一小题各判一次（金标准实测发现同一空出现 ✓ 和 ✗ 冲突）。
+  // 作答区重叠度高的判定只保留置信度最高的一条。
+  const verdictsRaw = dedupeVerdicts(collected)
   console.log(
     "[v0] grade-vlm: collected",
     details.length,
     "issue(s),",
-    verdictsRaw.length,
-    "verdict(s)",
+    collected.length,
+    "verdict(s),",
+    collected.length - verdictsRaw.length,
+    "dupe(s) removed",
   )
 
   /* ---------- Stage 2.5：算分与计数（verdicts 可用时以其为准） ---------- */

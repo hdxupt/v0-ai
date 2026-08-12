@@ -47,11 +47,17 @@ const BASE_GROUNDING = `
 - 在 correction_details[i].line_indexes 字段里填入命中的行号数组。例：[3] 表示只命中 L3；[5,6] 表示这条点评跨 L5 和 L6 两行。
 - 同时填 page_index（0-based）。多页时务必正确分页，不要把 第 2 页的 L23 写成 page_index=0。
 
-【若 OCR 没识别到目标怎么办】
-- 偶尔 OCR 会漏掉某行（手写太潦草、有涂改、有公式图）。这种情况下：
-  · 优先把点评附在 OCR 真实存在的"最相近一行"上（line_indexes 仍要给真实存在的行号）。
-  · 如果实在找不到对应行（如批注的是一段完全没被 OCR 识别的图块），你可以**额外**填一个 fallback bounding_box = [y, x, h, w]，单位 0~100 整数。但优先级最低，仅在 line_indexes 行号全无效时由服务端启用。
-- 永远不要编造一个不存在的 OCR 行号；宁可用 fallback bbox。
+【若 OCR 没识别到目标怎么办 —— 视觉定位补位】
+- 数学公式、几何图、潦草手写、涂改处，OCR 经常整段漏识别或认错。这是你作为视觉大模型必须补位的场景。
+- 处理顺序：
+  · 第一优先：若该错误旁边有 OCR 真实识别到的"最相近一行"，line_indexes 仍填该真实行号。
+  · 补位方案：当该错误所在区域【完全没有】可用的 OCR 行（如纯手写算式、公式图块），
+    你必须**用视觉直接定位**，填一个紧贴该错误区域的 fallback bounding_box = [y, x, h, w]，单位 0~100 整数。
+- bounding_box 精度要求（很重要，直接决定老师看到的框准不准）：
+  · 框要【紧贴】出错的那一小块内容（如那一行算式、那个写错的公式），不要框整道大题，也不要框整页。
+  · y/x 是该区域左上角，h/w 是它的高和宽；宁可稍微小一点贴紧，也不要框得过大。
+  · 估算前先在脑中把整张图看成 100×100 的网格，再读出该区域的上沿、左沿、高度、宽度。
+- 永远不要编造一个不存在的 OCR 行号；该用 bbox 补位时就大胆给 bbox。
 
 【内容对齐要求】
 - 每条 process_analysis 必须以"单引号引用学生原文片段"开头，格式：'<原文>' —— <点评>。
@@ -85,6 +91,28 @@ const BASE_OUTPUT_CONTRACT = `
 const BASE_PROFESSIONAL = `
 你是一位深谙教育心理学的资深一线名师，曾培养过多届省状元。
 你的批改要做到：判错准、给过程分、用语温暖且具体，让学生知道下一步该怎么改进。
+`
+
+const BASE_SCORE_TRACE = `
+【评分可追溯协议（务必逐条填写，这是本系统的核心要求）】
+为了让学生和老师能看清"这个分数是怎么算出来的"，每条 correction_details 都必须补齐两个字段：
+
+1. score_delta（带符号整数，相对满分 100 的增减）：
+   - type=error / partial / missing → 必须给负整数（如 -5、-3、-2），体现这一处扣了多少分；
+   - type=highlight → 给 0 或正数（亮点酌情加分，如 +1）；
+   - 扣分轻重要与错误严重程度匹配：原则性错误扣得多，小瑕疵扣得少。
+
+2. rubric_dimension（该扣分点主要拉低了哪个能力维度，必须是以下之一）：
+   - basics（计算与基础）：计算错误、公式记错、基础概念错；
+   - logic（逻辑思维）：思路错、推理跳步、因果不成立；
+   - knowledge（知识掌握）：知识点缺失、定理用错、概念混淆；
+   - application（应用能力）：会知识但不会用、审题错、迁移失败；
+   - presentation（书写规范）：步骤不规范、单位漏写、表达/书写问题、错别字病句。
+
+【对账要求】
+- 所有 score_delta 之和 + 100 应当约等于 summary.total_score（允许 ±少量综合调整）。
+- 例：满分 100，扣了 [-5,-4,-3,-3,-2,+1]，则 total_score ≈ 100-16 = 84。
+- 不要出现"标了 6 处错却只扣 2 分"或"total_score 与逐项扣分严重不符"的情况。
 `
 
 /* -------------------------------------------------------------------------- */
@@ -181,6 +209,7 @@ export function buildGradeSystemPrompt(subject: SubjectKey): string {
   - 知识掌握 (knowledge)
   - 应用能力 (application)
   - 书写规范 (presentation)`,
+    BASE_SCORE_TRACE,
   ]
     .map((s) => s.trim())
     .join("\n\n")
@@ -291,6 +320,72 @@ export function buildClassReportUserPrompt(input: BuildClassReportInput): string
       }`,
     )
   }
+  return lines.join("\n")
+}
+
+/* -------------------------------------------------------------------------- */
+/*                          AI 变式题（错题闭环）Prompt                      */
+/* -------------------------------------------------------------------------- */
+
+export interface BuildPracticeInput {
+  subject: SubjectKey
+  studentName: string
+  /** 学生本次得分 */
+  score: number
+  /** 薄弱知识点短语 */
+  weakPoints: string[]
+  /** 错题摘要：题干 + 错因解析 + 维度，来自 correction_details */
+  mistakes: Array<{
+    question_text: string
+    process_analysis: string
+    correct_answer?: string
+    dimension?: string
+  }>
+}
+
+export function buildPracticeSystemPrompt(subject: SubjectKey): string {
+  return [
+    `你是一位${labelFor(subject)}名师，正在为学生做"错题举一反三"专项训练。`,
+    `学生刚做完一次作业并被批改，你要根据他的真实错题，出几道"同知识点、换情境"的变式题，帮他巩固。`,
+    `
+【出题铁律】
+1. 紧扣错因：每道变式题必须针对学生真实犯过的错（同一知识点 / 同一易错点），不要出无关题。
+2. 换情境不换本质：数字、背景、问法可以变，但考查的知识点与原错题一致，难度相当或略高。
+3. 题型搭配：优先出 1~2 道单选客观题（type=choice，方便学生当场自测）+ 1 道解答题（type=open）。
+4. 客观题选项要有迷惑性：错误选项应踩中常见误区（最好就是学生原来犯的错），不要凑数。
+5. answer 必须严格正确；explanation 要讲清正确思路，并点出"这正是你上次错的地方"式的呼应。
+6. dimension 用错题归因的能力维度（basics/logic/knowledge/application/presentation）。
+7. 数学表达式用纯文本（如 x^2、√3、≥），不要输出 LaTeX 反斜杠命令。
+8. 全部用中文，语气鼓励、具体。`,
+    BASE_OUTPUT_CONTRACT,
+    `【输出】basis（一句话点明本组练习针对的薄弱点）+ questions（2~3 道变式题）。`,
+  ]
+    .map((s) => s.trim())
+    .join("\n\n")
+}
+
+export function buildPracticeUserPrompt(input: BuildPracticeInput): string {
+  const lines = [
+    `请根据以下学生的真实错题，生成针对性变式题。`,
+    ``,
+    `【学生】${input.studentName} · ${labelFor(input.subject)} · 本次得分 ${input.score}/100`,
+    `【薄弱知识点】${input.weakPoints.join("、") || "（未单列，请从错题中归纳）"}`,
+    ``,
+    `【本次错题清单】`,
+  ]
+  if (input.mistakes.length === 0) {
+    lines.push(`（本次没有明显错题，请围绕薄弱知识点出巩固提高题）`)
+  } else {
+    input.mistakes.forEach((m, i) => {
+      lines.push(
+        `${i + 1}. 原题/原句：${m.question_text}`,
+        `   错因解析：${m.process_analysis}${m.correct_answer ? `；正确：${m.correct_answer}` : ""}${
+          m.dimension ? `；维度：${m.dimension}` : ""
+        }`,
+      )
+    })
+  }
+  lines.push(``, `请输出 2~3 道变式题，紧扣上面的错因。`)
   return lines.join("\n")
 }
 

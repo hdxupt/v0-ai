@@ -248,12 +248,45 @@ export async function gradeSubmissionWithAI(
 }
 
 /**
- * 把 LLM 返回的 line_indexes（OCR 行号数组）解析成真实 bbox。
+ * 把 VLM 自行估算的 fallback bbox 裁剪到合理范围。
  *
- * 规则：
- * 1. 若 line_indexes 至少有 1 个有效行号 → bbox = 这些行 OCR bbox 的并集（取外接矩形）+ 4% 内边距，让框稍微贴一点四周；
- * 2. 若 line_indexes 全部无效但 fallback bounding_box 存在 → 用 fallback，并跑老的"超大框"过滤；
- * 3. 否则丢弃该条批注。
+ * 旧逻辑的问题：只要框高 > 25% 就把整条批注【硬丢弃】，导致数学解题步骤、
+ * 大段手写这类天然较高的错误区域在 OCR 失配时直接消失（框不见了）。
+ *
+ * 新逻辑：先把坐标钳制进 [0,100] 页面内，再判断——
+ * 只有当框【接近满页】（明显是模型幻觉出的整页大框）或退化为零面积时才丢弃，
+ * 其余一律保留并裁剪，让 VLM 视觉定位真正起到「OCR 失配处补位」的作用。
+ *
+ * 返回 null 表示该框不可用（应丢弃）。
+ */
+function sanitizeFallbackBbox(
+  raw: number[],
+): [number, number, number, number] | null {
+  if (raw.length !== 4) return null
+  let [y, x, h, w] = raw.map((n) => (Number.isFinite(n) ? n : 0))
+
+  // 钳制左上角到页面内
+  y = Math.max(0, Math.min(98, y))
+  x = Math.max(0, Math.min(98, x))
+  // 钳制宽高不越界，并设下限（避免 1px 细线框）
+  h = Math.max(2, Math.min(100 - y, h))
+  w = Math.max(2, Math.min(100 - x, w))
+
+  // 幻觉满页框过滤：覆盖面积 > 88% 视为无效定位
+  if ((h * w) / 100 > 88) return null
+
+  return [Math.round(y), Math.round(x), Math.round(h), Math.round(w)]
+}
+
+/**
+ * 把 LLM 返回的 line_indexes（OCR 行号数组）解析成真实 bbox，并标注定位来源。
+ *
+ * 规则（混合定位）：
+ * 1. line_indexes 至少命中 1 个有效行 → bbox = 这些行 OCR 真实 bbox 的并集 + 内边距，
+ *    box_source = "ocr"（文字定位，最可靠）；
+ * 2. 否则若 fallback bounding_box 可用 → 经 sanitizeFallbackBbox 裁剪后采用，
+ *    box_source = "vlm"（视觉大模型 grounding 补位，专治 OCR 漏识别的手写/公式/图块）；
+ * 3. 仅当两条路径都拿不到合理框时才丢弃。
  *
  * 同时为每条 detail 补齐 page_index（取首个命中行所在页）。
  */
@@ -261,16 +294,15 @@ function resolveCorrectionBboxes(
   details: GradingResult["correction_details"],
   ocrData: OcrData | null,
 ): GradingResult["correction_details"] {
-  const MAX_W = 90
-  const MAX_H = 25
   const PADDING = 1 // 百分比内边距
 
   const out: GradingResult["correction_details"] = []
   for (const d of details) {
     let bbox: [number, number, number, number] | null = null
+    let boxSource: "ocr" | "vlm" | undefined
     let pageIndex: number | undefined = d.page_index
 
-    // ---- 优先：line_indexes 路径 ----
+    // ---- 优先：line_indexes 路径（OCR 行框求并集） ----
     if (ocrData && d.line_indexes && d.line_indexes.length > 0) {
       const hits = d.line_indexes
         .map((i) => findLineByIndex(ocrData, i))
@@ -297,16 +329,18 @@ function resolveCorrectionBboxes(
         const w = Math.min(100 - xMin, Math.round(xMax - xMin + PADDING * 2))
         if (h > 0 && w > 0) {
           bbox = [yMin, xMin, h, w]
+          boxSource = "ocr"
           pageIndex = firstPage
         }
       }
     }
 
-    // ---- 备选：fallback bounding_box ----
+    // ---- 备选：VLM grounding 补位（裁剪而非硬丢弃） ----
     if (!bbox && d.bounding_box && d.bounding_box.length === 4) {
-      const [yy, xx, hh, w] = d.bounding_box
-      if (hh > 0 && w > 0 && w <= MAX_W && hh <= MAX_H) {
-        bbox = [yy, xx, hh, w] as [number, number, number, number]
+      const cleaned = sanitizeFallbackBbox(d.bounding_box)
+      if (cleaned) {
+        bbox = cleaned
+        boxSource = "vlm"
         if (pageIndex === undefined) pageIndex = 0
       }
     }
@@ -319,6 +353,7 @@ function resolveCorrectionBboxes(
     out.push({
       ...d,
       bounding_box: bbox,
+      box_source: boxSource,
       page_index: pageIndex ?? 0,
     })
   }

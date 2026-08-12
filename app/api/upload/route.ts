@@ -34,15 +34,16 @@ export async function POST(request: NextRequest) {
     const safeTask = (taskId ?? "misc").replace(/[^a-zA-Z0-9_-]/g, "_")
     const pathname = `submissions/${safeTask}/${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
 
-    // Blob 存储为 private，需通过 /api/file 鉴权后下发
+    // Blob store 为 public 类型：直接公开存储，URL 含不可枚举的随机路径。
+    // 返回完整公开 URL，前端与服务端（OCR/批改）都可直接访问，无需鉴权代理。
     const blob = await put(pathname, file, {
-      access: "private",
+      access: "public",
       contentType: file.type || "image/jpeg",
       addRandomSuffix: false,
     })
 
-    // 仅返回 pathname；前端通过 /api/file?pathname= 渲染
-    return NextResponse.json({ pathname: blob.pathname, size: file.size })
+    // 返回完整公开 URL（同时保留 pathname 以兼容旧逻辑）
+    return NextResponse.json({ url: blob.url, pathname: blob.pathname, size: file.size })
   } catch (error: any) {
     console.error("[v0] upload error:", error)
     return NextResponse.json(

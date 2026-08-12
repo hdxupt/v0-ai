@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { SESSION_COOKIE, LEGACY_COOKIE_NAMES, deserializeUser } from "@/lib/auth"
 
-const PUBLIC_PATHS = ["/login", "/api/auth"]
+const PUBLIC_PATHS = ["/login", "/api/auth", "/architecture", "/impact", "/grading-demo", "/grading-ab"]
 
 /**
  * 单 session 路由策略：
@@ -99,6 +99,6 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|images|manifest.webmanifest|icon-|api/health).*)",
+    "/((?!_next/static|_next/image|favicon.ico|images|manifest.webmanifest|icon-|api/health|pitch.html|arch.html).*)",
   ],
 }

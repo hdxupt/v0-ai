@@ -7,8 +7,10 @@ import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, Sparkles, CheckCircle2, AlertCircle, AlertTriangle, TrendingDown, Lightbulb } from "lucide-react"
 import { ImageGallery } from "@/components/student/image-gallery"
 import { formatDateTime } from "@/lib/format"
-import { isAIGradingV2, toViewerBoxes, normalizeWeakPoints } from "@/lib/types"
+import { isAIGradingV2, toViewerBoxes, normalizeWeakPoints, buildScoreBreakdown } from "@/lib/types"
 import { KnowledgeRadarChart } from "@/components/reports/knowledge-radar-chart"
+import { ScoreProvenance } from "@/components/grading/score-provenance"
+import { PracticeSetPanel } from "@/components/student/practice-set"
 
 export const dynamic = "force-dynamic"
 
@@ -54,6 +56,7 @@ export default async function ResultPage({ params }: { params: Promise<{ id: str
   const v2 = isAIGradingV2(aiIssues) ? aiIssues : null
   const boxes = toViewerBoxes(aiIssues)
   const weakPoints = normalizeWeakPoints(submission.weak_points)
+  const scoreBreakdown = buildScoreBreakdown(aiIssues)
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
@@ -129,6 +132,9 @@ export default async function ResultPage({ params }: { params: Promise<{ id: str
         </div>
       ) : null}
 
+      {/* 评分溯源：满分 → 逐条扣分 → 最终分 + 五维归因 */}
+      {scoreBreakdown ? <ScoreProvenance breakdown={scoreBreakdown} /> : null}
+
       {/* AI issue list */}
       {boxes.length > 0 ? (
         <div className="rounded-2xl border bg-card p-5 space-y-3">
@@ -191,6 +197,9 @@ export default async function ResultPage({ params }: { params: Promise<{ id: str
         <h2 className="text-sm font-semibold">你的答卷</h2>
         <ImageGallery pathnames={submission.image_urls} />
       </div>
+
+      {/* AI 变式题闭环：看懂错误 → 马上练同知识点变式题 */}
+      <PracticeSetPanel submissionId={submission.id} initialPractice={submission.practice_data} />
     </div>
   )
 }

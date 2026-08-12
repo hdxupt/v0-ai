@@ -15,8 +15,10 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    // public store：用 public access 读取（仅历史 pathname 数据会走到这里，
+    // 新数据已直接保存完整公开 URL，前端不再经过本代理）
     const result = await get(pathname, {
-      access: "private",
+      access: "public",
       ifNoneMatch: request.headers.get("if-none-match") ?? undefined,
     })
     if (!result) {

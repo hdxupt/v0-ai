@@ -147,6 +147,8 @@ export async function createTask(
     status?: Task["status"]
   },
 ): Promise<Task> {
+  // 过滤空班级 id，避免 [null,"c1"] 这类脏数据写入（会导致教师端统计取错班级）
+  task = { ...task, class_ids: (task.class_ids ?? []).filter((c): c is string => Boolean(c)) }
   // Calculate target_student_count
   const { data: students } = await supabase()
     .from("app_users")
@@ -352,6 +354,21 @@ export async function updateSubmissionGrading(
     description: `${payload.teacher_name}完成了对 ${payload.student_name} 的批阅，得分 ${payload.score}`,
   })
 
+  return data as Submission
+}
+
+/** 写入 AI 变式题闭环数据（学生点"生成练习"后按需调用）。 */
+export async function updateSubmissionPractice(
+  submissionId: string,
+  practice: unknown,
+): Promise<Submission> {
+  const { data, error } = await supabase()
+    .from("submissions")
+    .update({ practice_data: practice })
+    .eq("id", submissionId)
+    .select()
+    .single()
+  if (error) throw error
   return data as Submission
 }
 

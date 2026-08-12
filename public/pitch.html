@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SeWise · 决赛汇报</title>
+<style>
+  :root {
+    --bg: #f7f8f8;
+    --surface: #ffffff;
+    --ink: #15233b;
+    --ink-soft: #5a6b82;
+    --line: #e3e8ee;
+    --brand: #0f5f63;      /* 墨青：主色 */
+    --brand-soft: #e6f1f0;
+    --accent: #e07a3f;     /* 暖橙：数字高亮 */
+    --ok: #2f8f5b;
+    --radius: 14px;
+    --font: "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font);
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+
+  /* 放映容器：固定 16:9，居中适配 */
+  #stage {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .deck {
+    position: relative;
+    width: min(100vw, calc(100vh * 16 / 9));
+    height: min(100vh, calc(100vw * 9 / 16));
+    background: var(--surface);
+    overflow: hidden;
+  }
+
+  .slide {
+    position: absolute;
+    inset: 0;
+    padding: 6.2% 7.5%;
+    display: none;
+    flex-direction: column;
+    opacity: 0;
+    transition: opacity .35s ease;
+  }
+  .slide.active { display: flex; opacity: 1; }
+
+  /* 通用排版 */
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1.05vw;
+    font-weight: 600;
+    letter-spacing: .12em;
+    color: var(--brand);
+    text-transform: uppercase;
+  }
+  .eyebrow::before {
+    content: "";
+    width: 22px; height: 2px;
+    background: var(--brand);
+  }
+  h1 { font-size: 4.4vw; line-height: 1.12; font-weight: 800; letter-spacing: -.02em; }
+  h2 { font-size: 2.9vw; line-height: 1.18; font-weight: 800; letter-spacing: -.01em; }
+  h3 { font-size: 1.45vw; font-weight: 700; }
+  p, li, td, th { font-size: 1.25vw; line-height: 1.6; color: var(--ink-soft); }
+  .lead { font-size: 1.55vw; color: var(--ink-soft); line-height: 1.55; }
+  strong { color: var(--ink); font-weight: 700; }
+  .em { color: var(--accent); font-weight: 800; }
+  .slide-head { margin-bottom: 3.2%; }
+  .slide-head h2 { margin-top: .5vw; }
+  .grow { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+
+  /* P1 封面 */
+  .cover { justify-content: center; background:
+      radial-gradient(120% 90% at 88% 8%, var(--brand-soft) 0%, transparent 55%); }
+  .cover .logo {
+    display: inline-flex; align-items: center; gap: 12px;
+    font-weight: 800; font-size: 1.5vw; color: var(--brand); margin-bottom: 4%;
+  }
+  .cover .logo .dot { width: 14px; height: 14px; border-radius: 50%; background: var(--brand); }
+  .cover h1 .sub { display:block; color: var(--brand); font-size: 2.4vw; margin-top: 1.2vw; font-weight: 700; }
+  .cover .slogan { margin-top: 3.5%; font-size: 1.7vw; color: var(--ink-soft); max-width: 70%; }
+  .cover .meta {
+    margin-top: 6%;
+    display: flex; gap: 3.5vw; flex-wrap: wrap;
+    border-top: 1px solid var(--line); padding-top: 2.6%;
+  }
+  .cover .meta div span { display:block; font-size: .95vw; color: var(--brand); font-weight:700; letter-spacing:.08em; margin-bottom:.4vw; }
+  .cover .meta div b { font-size: 1.35vw; color: var(--ink); font-weight: 700; }
+
+  /* 痛点 → 价值 对照 */
+  .pv { display: grid; grid-template-columns: 1fr 1fr; gap: 2vw; }
+  .pv .col h3 { margin-bottom: 1.4vw; display:flex; align-items:center; gap:10px; }
+  .pv .pain h3 { color: var(--ink-soft); }
+  .pv .value h3 { color: var(--brand); }
+  .pv .row {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 1.5vw 1.7vw;
+    margin-bottom: 1.1vw;
+  }
+  .pv .value .row { background: var(--brand-soft); border-color: transparent; }
+  .pv .row b { color: var(--ink); }
+  .pv .tag { font-size: .9vw; font-weight:700; color: var(--brand); }
+
+  /* 架构流程 */
+  .flow { display: flex; align-items: stretch; gap: .6vw; flex-wrap: wrap; }
+  .flow .node {
+    flex: 1 1 0; min-width: 9vw;
+    background: var(--surface); border: 1.5px solid var(--line);
+    border-radius: 12px; padding: 1.3vw 1vw; text-align: center;
+    display:flex; flex-direction:column; gap:.5vw; justify-content:center;
+  }
+  .flow .node.key { border-color: var(--brand); background: var(--brand-soft); }
+  .flow .node .n-t { font-size: 1.15vw; font-weight: 700; color: var(--ink); }
+  .flow .node .n-s { font-size: .85vw; color: var(--ink-soft); }
+  .flow .arrow { display:flex; align-items:center; color: var(--brand); font-weight:800; font-size:1.4vw; }
+  .stack-note { margin-top: 2.6vw; display:flex; gap: 1vw; flex-wrap: wrap; }
+  .chip {
+    font-size: .95vw; font-weight:600; color: var(--brand);
+    background: var(--brand-soft); border-radius: 999px; padding: .5vw 1.1vw;
+  }
+
+  /* 创新点：左文右示意 */
+  .split { display: grid; grid-template-columns: 1.05fr .95fr; gap: 3vw; align-items: center; height:100%; }
+  .split ul { list-style: none; }
+  .split li { position: relative; padding-left: 1.7vw; margin-bottom: 1.4vw; font-size: 1.3vw; }
+  .split li::before { content: ""; position:absolute; left:0; top:.65vw; width:.7vw; height:.7vw; border-radius:50%; background: var(--brand); }
+  .panel {
+    background: var(--bg); border:1px solid var(--line); border-radius: var(--radius);
+    padding: 2vw; height: 100%; display:flex; flex-direction:column; justify-content:center; gap:1.3vw;
+  }
+
+  /* 标注示意 */
+  .anno-row { background: var(--surface); border:1px solid var(--line); border-radius:10px; padding:1.2vw 1.3vw; position:relative; }
+  .anno-row .q { font-size:1.05vw; color:var(--ink); }
+  .pill { display:inline-block; font-size:.8vw; font-weight:700; color:#fff; background:#d14343; border-radius:999px; padding:.2vw .7vw; margin-left:.5vw; }
+  .pill.ok { background: var(--ok); }
+  .wavy { text-decoration: underline wavy #d14343; text-decoration-thickness: 2px; text-underline-offset: 4px; }
+
+  /* 闭环三卡 */
+  .loop { display:flex; align-items:stretch; gap:1vw; height:100%; }
+  .loop .step {
+    flex:1; background: var(--bg); border:1px solid var(--line); border-radius: var(--radius);
+    padding: 2.4vw 1.6vw; display:flex; flex-direction:column; gap:1vw; justify-content:flex-start;
+  }
+  .loop .step .idx { width:2.6vw; height:2.6vw; border-radius:50%; background: var(--brand); color:#fff; font-weight:800; font-size:1.3vw; display:flex; align-items:center; justify-content:center; }
+  .loop .step h3 { font-size:1.4vw; }
+  .loop .arrow { display:flex; align-items:center; color:var(--brand); font-size:1.8vw; font-weight:800; }
+
+  /* 数据看板 */
+  .kpis { display:grid; grid-template-columns: repeat(3, 1fr); gap: 1.4vw; }
+  .kpi { background: var(--bg); border:1px solid var(--line); border-radius: var(--radius); padding: 1.8vw; }
+  .kpi.hl { background: var(--brand); border-color: var(--brand); }
+  .kpi.hl .num, .kpi.hl .lbl, .kpi.hl .sub { color:#fff; }
+  .kpi .num { font-size: 3.2vw; font-weight: 800; color: var(--accent); line-height:1; letter-spacing:-.02em; }
+  .kpi .lbl { font-size: 1.15vw; font-weight: 700; color: var(--ink); margin-top:.8vw; }
+  .kpi .sub { font-size: .9vw; color: var(--ink-soft); margin-top:.3vw; }
+  .compare { margin-top: 2vw; display:flex; align-items:center; gap:1.5vw; background:var(--brand-soft); border-radius:var(--radius); padding:1.6vw 2vw; }
+  .compare .side { text-align:center; }
+  .compare .side .t { font-size:1vw; color:var(--ink-soft); font-weight:600; }
+  .compare .side .v { font-size:2.2vw; font-weight:800; color:var(--ink); }
+  .compare .vs { font-size:1.4vw; font-weight:800; color:var(--brand); }
+  .compare .res { margin-left:auto; text-align:right; }
+  .compare .res .v { font-size:2.6vw; font-weight:800; color:var(--accent); }
+
+  /* 总结 */
+  .outlook { display:grid; grid-template-columns: 1fr 1fr; gap:2.4vw; }
+  .outlook .block h3 { color:var(--brand); margin-bottom:1.2vw; }
+  .outlook ul { list-style:none; }
+  .outlook li { padding-left:1.5vw; position:relative; margin-bottom:1vw; font-size:1.25vw; }
+  .outlook li::before { content:"→"; position:absolute; left:0; color:var(--accent); font-weight:800; }
+  .thanks { margin-top:auto; font-size:1.6vw; font-weight:700; color:var(--brand); }
+
+  /* 控件 */
+  #progress { position: fixed; top:0; left:0; height:3px; background: var(--brand); width:0; transition: width .3s ease; z-index: 20; }
+  .nav { position: fixed; bottom: 18px; right: 22px; display:flex; align-items:center; gap:14px; z-index: 20; color: var(--ink-soft); font-size:13px; }
+  .nav button { border:1px solid var(--line); background:var(--surface); color:var(--ink); width:34px; height:34px; border-radius:8px; cursor:pointer; font-size:16px; }
+  .nav button:hover { border-color: var(--brand); color: var(--brand); }
+  .dots { position: fixed; bottom: 22px; left: 22px; display:flex; gap:8px; z-index:20; }
+  .dots i { width:8px; height:8px; border-radius:50%; background:var(--line); cursor:pointer; transition: all .2s; }
+  .dots i.on { background: var(--brand); transform: scale(1.25); }
+  .hint { position: fixed; bottom: 18px; left:50%; transform:translateX(-50%); font-size:12px; color:#9aa7b6; z-index:20; }
+  .fill { color: var(--accent); font-style: normal; border-bottom:2px dotted var(--accent); }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<div id="stage">
+  <div class="deck" id="deck">
+
+    <!-- P1 封面 -->
+    <section class="slide cover active">
+      <div class="logo"><span class="dot"></span>SeWise</div>
+      <h1>SeWise<span class="sub">课后作业 AI 闭环助手</span></h1>
+      <p class="slogan">让教师减负、让学生精准伴学、让学校用数据说话。</p>
+      <div class="meta">
+        <div><span>参赛队伍</span><b><i class="fill">【队名待填】</i></b></div>
+        <div><span>参赛赛道</span><b><i class="fill">【赛道待填】</i></b></div>
+        <div><span>团队成员 / 分工</span><b><i class="fill">【姓名·分工 待填】</i></b></div>
+      </div>
+    </section>
+
+    <!-- P2 问题定义 -->
+    <section class="slide">
+      <div class="slide-head">
+        <span class="eyebrow">问题定义</span>
+        <h2>从"批改"升级为"育人闭环"</h2>
+      </div>
+      <div class="grow">
+        <div class="pv">
+          <div class="col pain">
+            <h3>现状痛点</h3>
+            <div class="row"><b>教师</b>：一周约 <b>25 小时</b>耗在重复批改</div>
+            <div class="row"><b>学生</b>：只看到分数，<b>不知道哪里错、为什么错</b></div>
+            <div class="row"><b>学校</b>：缺乏教学过程的<b>结构化数据</b></div>
+          </div>
+          <div class="col value">
+            <h3>SeWise 带来的价值</h3>
+            <div class="row"><span class="tag">效率</span><br/>工时降至约 4 小时，<b>省 84%</b></div>
+            <div class="row"><span class="tag">伴学</span><br/>错处精准标注 + 错因解析 + <b>变式题巩固</b></div>
+            <div class="row"><span class="tag">数据</span><br/>五维诊断 + 班级薄弱点，按希沃规范回流</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- P3 整体架构 -->
+    <section class="slide">
+      <div class="slide-head">
+        <span class="eyebrow">方案 · 整体架构</span>
+        <h2>一条跑通真实数据的批改闭环</h2>
+      </div>
+      <div class="grow">
+        <div class="flow">
+          <div class="node"><div class="n-t">多页上传</div><div class="n-s">学生手机端</div></div>
+          <div class="arrow">→</div>
+          <div class="node"><div class="n-t">Blob 存储</div><div class="n-s">原图归档</div></div>
+          <div class="arrow">→</div>
+          <div class="node"><div class="n-t">OCR</div><div class="n-s">带行号文本</div></div>
+          <div class="arrow">→</div>
+          <div class="node key"><div class="n-t">VLM 分块批改</div><div class="n-s">Qwen3-VL · 核心</div></div>
+          <div class="arrow">→</div>
+          <div class="node"><div class="n-t">双阶段评语</div><div class="n-s">评分 / 评语</div></div>
+          <div class="arrow">→</div>
+          <div class="node"><div class="n-t">教师审核</div><div class="n-s">一键推送</div></div>
+          <div class="arrow">→</div>
+          <div class="node"><div class="n-t">班级看板</div><div class="n-s">数据沉淀</div></div>
+        </div>
+        <div class="stack-note">
+          <span class="chip">Next.js + Supabase</span>
+          <span class="chip">腾讯云 OCR</span>
+          <span class="chip">Qwen3-VL 视觉批改</span>
+          <span class="chip">Vercel Blob</span>
+          <span class="chip">全链路真实数据，非原型</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- P4 创新点① -->
+    <section class="slide">
+      <div class="slide-head">
+        <span class="eyebrow">创新点 ①</span>
+        <h2>让人"一眼看清错在哪"</h2>
+      </div>
+      <div class="split">
+        <ul>
+          <li>重新定义框选：本质<strong>不是画框，而是最快定位错误</strong>。</li>
+          <li><strong>客观题</strong> → 题号旁<strong>贴标签</strong>，不画框、不遮挡作答。</li>
+          <li><strong>主观题</strong> → 错误那一行<strong>波浪下划线</strong>，柔和精准。</li>
+          <li>技术上<strong>绕开了视觉大模型坐标漂移</strong>这一行业难题。</li>
+        </ul>
+        <div class="panel">
+          <div class="anno-row"><span class="q">3. 计算 12 × 8 = <strong>86</strong></span><span class="pill">错 · 应为96</span></div>
+          <div class="anno-row"><span class="q">5. 判断：三角形内角和 360°</span><span class="pill">错</span></div>
+          <div class="anno-row"><span class="q">解：设速度为 v，则 <span class="wavy">v = s × t</span> ……</span></div>
+          <div class="anno-row"><span class="q">2. 填空：水的沸点 100℃</span><span class="pill ok">对</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- P5 创新点② -->
+    <section class="slide">
+      <div class="slide-head">
+        <span class="eyebrow">创新点 ②</span>
+        <h2>从"知道错"到"学会了"</h2>
+      </div>
+      <div class="grow">
+        <div class="loop">
+          <div class="step">
+            <div class="idx">1</div>
+            <h3>精准批改</h3>
+            <p>分题型标注错处，AI 给出错因与建议。</p>
+          </div>
+          <div class="arrow">→</div>
+          <div class="step">
+            <div class="idx">2</div>
+            <h3>评分可追源</h3>
+            <p>满分 → 逐条扣分 → 五维归因，每一分都可解释。</p>
+          </div>
+          <div class="arrow">→</div>
+          <div class="step">
+            <div class="idx">3</div>
+            <h3>变式题巩固</h3>
+            <p>针对错题自动生成同知识点变式，当场练、当场判。<br/><strong>客观题前端比对、解答题对照解析自评，零额外 AI 调用。</strong></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- P6 成果演示 / 量化数据 -->
+    <section class="slide">
+      <div class="slide-head">
+        <span class="eyebrow">成果演示 · 量化数据</span>
+        <h2>真实运行统计，不是 PPT 数字</h2>
+      </div>
+      <div class="grow">
+        <div class="kpis">
+          <div class="kpi hl">
+            <div class="num">12×</div>
+            <div class="lbl">单份批改效率提升</div>
+            <div class="sub">人工 5 分钟 → SeWise 25 秒</div>
+          </div>
+          <div class="kpi">
+            <div class="num">¥0.18</div>
+            <div class="lbl">单份直接成本</div>
+            <div class="sub">token 估算，规模化可控</div>
+          </div>
+          <div class="kpi">
+            <div class="num">≈60h</div>
+            <div class="lbl">单班单学期可省工时</div>
+            <div class="sub">50 人 × 20 次作业</div>
+          </div>
+        </div>
+        <div class="compare">
+          <div class="side"><div class="t">传统人工精批</div><div class="v">≈ 5 分钟 / 份</div></div>
+          <div class="vs">VS</div>
+          <div class="side"><div class="t">SeWise 全自动</div><div class="v">≈ 25 秒 / 份</div></div>
+          <div class="res"><div class="t">效率提升</div><div class="v">12×</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- P7 总结展望 -->
+    <section class="slide">
+      <div class="slide-head">
+        <span class="eyebrow">总结 · 展望</span>
+        <h2>已落地，且越用越准</h2>
+      </div>
+      <div class="grow">
+        <div class="outlook">
+          <div class="block">
+            <h3>落地价值</h3>
+            <ul>
+              <li>已跑通真实数据，可直接嵌入希沃生态使用</li>
+              <li>帮教师省时间，帮学生真正学会</li>
+              <li>为学校沉淀结构化教学数据</li>
+            </ul>
+          </div>
+          <div class="block">
+            <h3>后续优化方向</h3>
+            <ul>
+              <li>用教师每次批改修正反哺<strong>专用模型微调</strong>（数据飞轮 + 本地化合规）</li>
+              <li>客观题快路径进一步<strong>降本提速</strong></li>
+              <li>图像预处理优化：弱笔迹 / 纸张阴影</li>
+            </ul>
+          </div>
+        </div>
+        <div class="thanks">SeWise · 让作业批改成为真正的学习闭环。谢谢各位评委！</div>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<div class="dots" id="dots"></div>
+<div class="nav">
+  <button id="prev" aria-label="上一页">‹</button>
+  <span id="pageno">1 / 7</span>
+  <button id="next" aria-label="下一页">›</button>
+</div>
+<div class="hint">← → 或空格翻页 · F 全屏</div>
+
+<script>
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  const total = slides.length;
+  let cur = 0;
+  const dotsWrap = document.getElementById('dots');
+  const pageno = document.getElementById('pageno');
+  const progress = document.getElementById('progress');
+
+  slides.forEach((_, i) => {
+    const d = document.createElement('i');
+    d.addEventListener('click', () => go(i));
+    dotsWrap.appendChild(d);
+  });
+  const dots = Array.from(dotsWrap.children);
+
+  function go(i) {
+    cur = Math.max(0, Math.min(total - 1, i));
+    slides.forEach((s, idx) => s.classList.toggle('active', idx === cur));
+    dots.forEach((d, idx) => d.classList.toggle('on', idx === cur));
+    pageno.textContent = (cur + 1) + ' / ' + total;
+    progress.style.width = ((cur + 1) / total * 100) + '%';
+  }
+  function nextSlide() { go(cur + 1); }
+  function prevSlide() { go(cur - 1); }
+
+  document.getElementById('next').addEventListener('click', nextSlide);
+  document.getElementById('prev').addEventListener('click', prevSlide);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); nextSlide(); }
+    else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); prevSlide(); }
+    else if (e.key === 'Home') go(0);
+    else if (e.key === 'End') go(total - 1);
+    else if (e.key.toLowerCase() === 'f') {
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+      else document.exitFullscreen();
+    }
+  });
+  go(0);
+</script>
+</body>
+</html>

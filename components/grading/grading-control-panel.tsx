@@ -12,6 +12,7 @@ import {
   AlertTriangle,
   CircleSlash,
   Loader2,
+  BookCheck,
 } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
@@ -28,7 +29,8 @@ import type {
   Submission,
   Task,
 } from "@/lib/types"
-import { isAIGradingV2, normalizeWeakPoints } from "@/lib/types"
+import { isAIGradingV2, normalizeWeakPoints, buildScoreBreakdown } from "@/lib/types"
+import { ScoreProvenance } from "@/components/grading/score-provenance"
 
 type Phase = "idle" | "processing" | "done" | "error"
 
@@ -96,6 +98,18 @@ export function GradingControlPanel({
   const weakPointStrings = v2
     ? v2.summary.weak_points
     : normalizeWeakPoints(submission.weak_points as any)
+
+  const scoreBreakdown = useMemo(() => buildScoreBreakdown(aiField), [aiField])
+
+  // 是否对照了教师标准答案：优先看批改结果的 model 标记，回退看任务是否配置了答案
+  const usedAnswerKey = useMemo(() => {
+    if (v2 && typeof v2.model === "string" && v2.model.includes("answer-key")) return true
+    const hasKey =
+      (task.answer_key_urls?.length ?? 0) > 0 ||
+      Boolean(task.answer_key_text?.trim()) ||
+      Boolean(task.scoring_notes?.trim())
+    return hasKey
+  }, [v2, task.answer_key_urls, task.answer_key_text, task.scoring_notes])
 
   async function handleStartAI() {
     setPhase("processing")
@@ -262,20 +276,31 @@ export function GradingControlPanel({
           )}
 
           {phase === "done" && (
-            <div className="flex items-center justify-between text-xs">
-              <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                {initiallyGraded ? "已有批阅结果" : "批阅完成"}
-                {v2 ? (
-                  <span className="text-muted-foreground ml-1">
-                    · {v2.correction_details.length} 处批注
-                  </span>
-                ) : null}
-              </span>
-              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={handleReset}>
-                <RotateCcw className="w-3 h-3" />
-                重新批阅
-              </Button>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  {initiallyGraded ? "已有批阅结果" : "批阅完成"}
+                  {v2 ? (
+                    <span className="text-muted-foreground ml-1">
+                      · {v2.correction_details.length} 处批注
+                    </span>
+                  ) : null}
+                </span>
+                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={handleReset}>
+                  <RotateCcw className="w-3 h-3" />
+                  重新批阅
+                </Button>
+              </div>
+              {usedAnswerKey ? (
+                <Badge
+                  variant="outline"
+                  className="font-normal gap-1 bg-primary/10 text-primary border-primary/30"
+                >
+                  <BookCheck className="w-2.5 h-2.5" />
+                  已对照教师标准答案
+                </Badge>
+              ) : null}
             </div>
           )}
         </Card>
@@ -306,6 +331,11 @@ export function GradingControlPanel({
               })}
             </div>
           </Card>
+        ) : null}
+
+        {/* 评分溯源：满分→逐条扣分→最终分 */}
+        {phase === "done" && scoreBreakdown ? (
+          <ScoreProvenance breakdown={scoreBreakdown} />
         ) : null}
 
         {/* 薄弱知识点 */}

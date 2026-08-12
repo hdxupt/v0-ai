@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { getCurrentTeacher } from "@/lib/auth-server"
 import { getSubmission, getTask, updateSubmissionGrading } from "@/lib/db"
-import { gradeSubmissionWithAI } from "@/lib/ai/grade"
+import { gradeSubmission } from "@/lib/ai/grade-router"
 
 /** Vercel functions max duration for AI grading. */
 export const maxDuration = 120
@@ -31,7 +31,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     try {
       // 复用已有 OCR 缓存（避免重批改时再次烧调用额度）
       const cachedOcr = (submission as any).ocr_data ?? null
-      const payload = await gradeSubmissionWithAI(submission, task, {
+      const payload = await gradeSubmission(submission, task, {
         cachedOcrData: cachedOcr,
       })
       const updated = await updateSubmissionGrading(id, {

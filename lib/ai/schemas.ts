@@ -21,6 +21,16 @@ function parseMaybeJsonString<T>(val: unknown): unknown {
 export const BboxTypeEnum = z.enum(["error", "partial", "highlight", "missing"])
 export type BboxType = z.infer<typeof BboxTypeEnum>
 
+/** 评分可追溯：每个扣分点关联到五维能力之一，与 radar_analysis 的 key 完全一致 */
+export const RubricDimensionEnum = z.enum([
+  "basics",
+  "logic",
+  "knowledge",
+  "application",
+  "presentation",
+])
+export type RubricDimension = z.infer<typeof RubricDimensionEnum>
+
 /**
  * Visual Grounding 框
  * bounding_box = [y, x, h, w]，单位是图片 0~100 相对坐标
@@ -37,7 +47,14 @@ export const CorrectionDetailSchema = z.object({
     .min(-100)
     .max(100)
     .optional()
-    .describe("该项相对满分的扣分或加分（错题给负数，亮点给 0 或正数）"),
+    .describe(
+      "该项相对满分的扣/加分。error/partial/missing 必须给负整数（如 -3），" +
+        "highlight 给 0 或正数。所有 score_delta 之和 + 100 应约等于 summary.total_score。",
+    ),
+  rubric_dimension: RubricDimensionEnum.optional().describe(
+    "该扣分点主要拉低的能力维度，必须是 basics/logic/knowledge/application/presentation 之一，" +
+      "与 radar_analysis 对应。用于让学生与老师看清'这一处扣分影响了哪个能力维度'。",
+  ),
   /**
    * 该批注覆盖的 OCR 行号（全局唯一，对应 buildTranscriptForLLM 输出里的 L1/L2/...）。
    * 服务端会把这些行号对应的真实 OCR bbox 取并集，得到该批注的最终位置框。
@@ -68,6 +85,19 @@ export const CorrectionDetailSchema = z.object({
   /** （可选）页码索引，0-based；默认 0，多页提交时模型必须明确 */
   page_index: z.number().int().min(0).optional().describe("0-based 页码"),
   confidence: z.number().min(0).max(1).describe("整体置信度"),
+  /**
+   * （服务端填写，模型无需输出）该框的定位来源：
+   * - "ocr"：由命中的 OCR 行真实 bbox 求并集得到，文字定位最可靠；
+   * - "vlm"：OCR 未能识别该区域（手写/公式/图块），由视觉大模型 grounding 补位。
+   * 前端据此区分渲染（实线 vs 虚线 + "AI 定位"标签）。
+   */
+  box_source: z.enum(["ocr", "vlm"]).optional().describe("定位来源：ocr 行框 / vlm 视觉补位"),
+  /**
+   * （服务端填写，模型无需输出）题型分类，决定前端标注方式：
+   * - "objective"：客观题（填空/选择/判断）→ 题号旁贴标签，不画框；
+   * - "subjective"：主观题/作文/解答 → 行级波浪下划线，不画框。
+   */
+  question_type: z.enum(["objective", "subjective"]).optional().describe("题型：objective / subjective"),
 })
 export type CorrectionDetail = z.infer<typeof CorrectionDetailSchema>
 
@@ -115,6 +145,38 @@ export const GradingResultSchema = z.object({
   radar_analysis: z.preprocess(parseMaybeJsonString, RadarAnalysisSchema),
 })
 export type GradingResult = z.infer<typeof GradingResultSchema>
+
+/* ============================== AI 变式题闭环 ============================== */
+
+export const PracticeQuestionSchema = z.object({
+  dimension: RubricDimensionEnum.optional().describe(
+    "该题针对的能力维度，对应错题归因（basics/logic/knowledge/application/presentation）",
+  ),
+  knowledge: z.string().min(2).max(40).describe("该题针对的知识点 / 错因短语，如'一元二次方程判别式'"),
+  type: z.enum(["choice", "open"]).describe("choice=单选客观题；open=主观解答题"),
+  stem: z.string().min(5).max(400).describe("题干。数学用纯文本表达式，不要用 LaTeX 反斜杠"),
+  options: z.preprocess(
+    parseMaybeJsonString,
+    z
+      .array(z.string().min(1).max(120))
+      .min(2)
+      .max(4)
+      .optional()
+      .describe("客观题选项，形如 ['A. xxx','B. xxx','C. xxx','D. xxx']；type=open 时省略"),
+  ),
+  answer: z.string().min(1).max(300).describe("标准答案：choice 填选项字母如'B'；open 填参考答案要点"),
+  explanation: z.string().min(5).max(500).describe("解析：讲清正确思路，呼应学生原错题的错因"),
+})
+export type PracticeQuestion = z.infer<typeof PracticeQuestionSchema>
+
+export const PracticeSetResultSchema = z.object({
+  basis: z.string().min(2).max(60).describe("本组练习针对的薄弱点���要，用于标题展示"),
+  questions: z.preprocess(
+    parseMaybeJsonString,
+    z.array(PracticeQuestionSchema).min(1).max(5).describe("2~3 道变式题最佳"),
+  ),
+})
+export type PracticeSetResult = z.infer<typeof PracticeSetResultSchema>
 
 /* ============================== 班级学情报告 ============================== */
 

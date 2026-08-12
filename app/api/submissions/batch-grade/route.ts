@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { getCurrentTeacher } from "@/lib/auth-server"
 import { createClient } from "@/lib/supabase/client"
 import { updateSubmissionGrading } from "@/lib/db"
-import { gradeSubmissionWithAI, pMapLimit } from "@/lib/ai/grade"
+import { pMapLimit } from "@/lib/ai/grade"
+import { gradeSubmission } from "@/lib/ai/grade-router"
 import { GRADING_CONCURRENCY } from "@/lib/ai/config"
 import type { Submission, Task } from "@/lib/types"
 
@@ -60,7 +61,7 @@ export async function POST(req: NextRequest) {
       if (!task) throw new Error("作业不存在")
 
       const cachedOcr = (sub as any).ocr_data ?? null
-      const payload = await gradeSubmissionWithAI(sub, task, {
+      const payload = await gradeSubmission(sub, task, {
         cachedOcrData: cachedOcr,
       })
       await updateSubmissionGrading(sub.id, {

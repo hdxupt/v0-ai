@@ -167,3 +167,38 @@
     color-mix(in oklch, var(--accent) 40%, transparent)
   );
 }
+
+/* ============================== 讲评稿 PDF 打印 ============================== */
+@media print {
+  /* 打印时：隐藏 body 下除讲评稿弹层外的一切，避免长报告撑出空白页 */
+  body.lecture-printing > *:not([data-lecture-portal]) {
+    display: none !important;
+  }
+  /* 弹层本身改为静态流式布局，让讲评稿正常分页 */
+  body.lecture-printing [data-lecture-portal] {
+    position: static !important;
+    display: block !important;
+    background: none !important;
+    backdrop-filter: none !important;
+  }
+  /* 工具栏、遮罩滚动容器的额外样式清理 */
+  body.lecture-printing [data-lecture-portal] > div {
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+  /* 打印时强制隐藏交互控件（工具栏等） */
+  .print\:hidden {
+    display: none !important;
+  }
+  /* A4 讲评稿正文：去掉屏幕态的阴影/最大宽限制 */
+  .lecture-print-root {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+  @page {
+    size: A4;
+    margin: 14mm 12mm;
+  }
+}

@@ -4,7 +4,7 @@ import { useState } from "react"
 import { GradingImageViewer } from "./grading-image-viewer"
 import { GradingControlPanel } from "./grading-control-panel"
 import type { Submission, Task, AppUser, ViewerBox, AIIssuesField } from "@/lib/types"
-import { toViewerBoxes, toQuestionVerdicts } from "@/lib/types"
+import { toViewerBoxes, toQuestionVerdicts, isAIGradingV2 } from "@/lib/types"
 
 interface Props {
   submission: Submission
@@ -27,6 +27,10 @@ export function GradingWorkspace({ submission, task, student, teacher }: Props) 
 
   const boxes: ViewerBox[] = toViewerBoxes(aiField)
   const verdicts = toQuestionVerdicts(aiField)
+  // 卷首红笔总分：优先取 AI 批改结果里的分数，回退到已保存分数
+  const stampScore = isAIGradingV2(aiField)
+    ? aiField.summary.total_score
+    : (submission.score ?? null)
 
   return (
     <div className="flex h-[calc(100vh-7rem)] min-h-[640px]">
@@ -35,6 +39,7 @@ export function GradingWorkspace({ submission, task, student, teacher }: Props) 
           imageUrls={submission.image_urls}
           boxes={boxes}
           verdicts={verdicts}
+          score={stampScore}
           showAnnotations={showAnnotations}
           currentIndex={currentImageIndex}
           onIndexChange={setCurrentImageIndex}

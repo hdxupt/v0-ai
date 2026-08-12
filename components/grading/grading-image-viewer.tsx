@@ -74,6 +74,8 @@ interface Props {
   boxes: ViewerBox[]
   /** 逐小题判定（红笔留痕）。有值时在原卷上渲染 ✓/✗/半对 */
   verdicts?: AIQuestionVerdict[]
+  /** 总分。有值且已批阅时在卷首盖红笔分数章 */
+  score?: number | null
   showAnnotations: boolean
   currentIndex: number
   onIndexChange: (idx: number) => void
@@ -85,6 +87,7 @@ export function GradingImageViewer({
   imageUrls,
   boxes,
   verdicts = [],
+  score = null,
   showAnnotations,
   currentIndex,
   onIndexChange,
@@ -179,15 +182,24 @@ export function GradingImageViewer({
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto p-6 flex items-start justify-center">
+      {/* 讲台桌面：细点阵纹理，卷子摊在上面 */}
+      <div
+        className="flex-1 overflow-auto p-6 flex items-start justify-center"
+        style={{
+          backgroundImage:
+            "radial-gradient(color-mix(in oklch, var(--foreground) 7%, transparent) 1px, transparent 1px)",
+          backgroundSize: "22px 22px",
+        }}
+      >
         <div
-          className="relative shadow-lg transition-transform duration-200 origin-top"
+          className="relative transition-transform duration-200 origin-top"
           style={{
             transform: `scale(${zoom / 100}) rotate(${rotation}deg)`,
             width: "min(640px, 100%)",
+            filter: "drop-shadow(0 10px 24px color-mix(in oklch, var(--foreground) 18%, transparent))",
           }}
         >
-          <div className="relative w-full bg-card rounded-sm overflow-hidden">
+          <div className="relative w-full bg-card rounded-sm overflow-hidden ring-1 ring-border">
             {url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -201,6 +213,11 @@ export function GradingImageViewer({
                 暂无图片
               </div>
             )}
+
+            {/* 卷首红笔总分：只盖在第 1 页，随批注开关显隐 */}
+            {showAnnotations && currentIndex === 0 && typeof score === "number" && hasVerdicts ? (
+              <ScoreStamp score={score} />
+            ) : null}
 
             {hasVerdicts && showAnnotations ? (
               <RedPenOverlay verdicts={verdicts} pageIndex={currentIndex} />
@@ -313,35 +330,61 @@ export function GradingImageViewer({
       </div>
 
       <div className="flex items-center justify-between px-4 py-2 border-t border-border bg-card text-xs text-muted-foreground">
-        <span>
-          悬停在标记上查看 AI 批改细节
-          {currentIndex !== 0 && total > 1 ? "（标记仅显示在第 1 页）" : ""}
-        </span>
-        <div className="flex items-center gap-3 flex-wrap">
-          <Legend dot="bg-destructive" label="错误" />
-          <Legend dot="bg-[color:var(--warning,#f59e0b)]" label="半对/注意" />
-          <Legend dot="bg-emerald-500" label="亮点" />
-          <Legend dot="bg-muted-foreground" label="漏做" />
-          <span className="inline-flex items-center gap-1">
-            <span className="px-1 h-3 rounded-full bg-destructive" />
-            标签 = 客观题
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <span
-              className="w-4 h-1.5"
-              style={{
-                backgroundImage: `url("data:image/svg+xml,${encodeURIComponent(
-                  "<svg xmlns='http://www.w3.org/2000/svg' width='14' height='6' viewBox='0 0 14 6'><path d='M0 4 Q3.5 0.5 7 4 T14 4' fill='none' stroke='%23dc2626' stroke-width='1.6'/></svg>",
-                )}")`,
-                backgroundRepeat: "repeat-x",
-                backgroundPosition: "left center",
-                backgroundSize: "14px 6px",
-              }}
-            />
-            波浪线 = 主观题
-          </span>
-        </div>
+        {hasVerdicts ? (
+          <>
+            <span>红笔留痕跟随作答位置 · 悬停旧版标记可看细节</span>
+            <div className="flex items-center gap-3 flex-wrap font-medium" style={{ color: "#d13438" }}>
+              <span>✓ 对</span>
+              <span>✗ 错（附正确答案）</span>
+              <span>半对（附得分）</span>
+              <span className="inline-flex items-center gap-1 text-sky-600">
+                <span className="w-2.5 h-2.5 rounded-full border border-dashed border-sky-500" />
+                待老师裁决
+              </span>
+            </div>
+          </>
+        ) : (
+          <>
+            <span>
+              悬停在标记上查看 AI 批改细节
+              {currentIndex !== 0 && total > 1 ? "（标记仅显示在第 1 页）" : ""}
+            </span>
+            <div className="flex items-center gap-3 flex-wrap">
+              <Legend dot="bg-destructive" label="错误" />
+              <Legend dot="bg-[color:var(--warning,#f59e0b)]" label="半对/注意" />
+              <Legend dot="bg-emerald-500" label="亮点" />
+              <Legend dot="bg-muted-foreground" label="漏做" />
+            </div>
+          </>
+        )}
       </div>
+    </div>
+  )
+}
+
+/**
+ * 卷首红笔总分章：仿真人老师在卷首写的大分数 + 双下划线，微微倾斜。
+ */
+function ScoreStamp({ score }: { score: number }) {
+  return (
+    <div
+      className="absolute top-[1.5%] right-[4%] z-10 select-none pointer-events-none animate-in fade-in zoom-in-95 duration-500"
+      style={{ transform: "rotate(-6deg)", color: "#d13438" }}
+      aria-label={`总分 ${score} 分`}
+    >
+      <div className="flex items-baseline gap-1 leading-none">
+        <span className="text-5xl font-bold tracking-tight" style={{ fontFamily: "cursive" }}>
+          {score}
+        </span>
+        <span className="text-lg font-semibold" style={{ fontFamily: "cursive" }}>
+          分
+        </span>
+      </div>
+      {/* 双下划线，手写微弯 */}
+      <svg width="86" height="12" viewBox="0 0 86 12" fill="none" className="mt-0.5" aria-hidden="true">
+        <path d="M2 4 C24 1.5 58 1.5 84 3.5" stroke="#d13438" strokeWidth="2.4" strokeLinecap="round" />
+        <path d="M6 9.5 C28 7 56 7 80 8.8" stroke="#d13438" strokeWidth="2" strokeLinecap="round" />
+      </svg>
     </div>
   )
 }

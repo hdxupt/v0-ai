@@ -29,8 +29,10 @@ import type {
   Submission,
   Task,
 } from "@/lib/types"
-import { isAIGradingV2, normalizeWeakPoints, buildScoreBreakdown } from "@/lib/types"
+import { isAIGradingV2, normalizeWeakPoints, buildScoreBreakdown, toQuestionVerdicts } from "@/lib/types"
+import type { AIQuestionVerdict } from "@/lib/types"
 import { ScoreProvenance } from "@/components/grading/score-provenance"
+import { UncertainReviewPanel } from "@/components/grading/uncertain-review-panel"
 
 type Phase = "idle" | "processing" | "done" | "error"
 
@@ -61,6 +63,47 @@ const TYPE_BADGE: Record<AIBboxType, { label: string; cls: string; Icon: any }> 
   },
   highlight: { label: "亮点", cls: "bg-emerald-500 text-white", Icon: Sparkles },
   missing: { label: "漏做", cls: "bg-muted-foreground text-background", Icon: CircleSlash },
+}
+
+/** 逐题判定统计条：色块分段 + 计数，一眼看清整卷的对错分布 */
+function VerdictStats({ verdicts }: { verdicts: AIQuestionVerdict[] }) {
+  const total = verdicts.length
+  const seg = [
+    { key: "correct", label: "对", cls: "bg-emerald-500", text: "text-emerald-700 dark:text-emerald-400" },
+    { key: "wrong", label: "错", cls: "bg-destructive", text: "text-destructive" },
+    { key: "partial", label: "半对", cls: "bg-amber-500", text: "text-amber-700 dark:text-amber-400" },
+    { key: "unanswered", label: "漏做", cls: "bg-muted-foreground", text: "text-muted-foreground" },
+    { key: "uncertain", label: "待裁决", cls: "bg-sky-500", text: "text-sky-700 dark:text-sky-400" },
+  ] as const
+  const counts = seg.map((s) => ({ ...s, n: verdicts.filter((v) => v.verdict === s.key).length }))
+
+  return (
+    <Card className="p-4 gap-2.5">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          逐题判定
+        </span>
+        <span className="text-xs text-muted-foreground tabular-nums">共 {total} 题</span>
+      </div>
+      <div className="flex h-2 w-full rounded-full overflow-hidden bg-muted">
+        {counts
+          .filter((c) => c.n > 0)
+          .map((c) => (
+            <div key={c.key} className={c.cls} style={{ width: `${(c.n / total) * 100}%` }} />
+          ))}
+      </div>
+      <div className="flex items-center gap-3 flex-wrap text-xs">
+        {counts
+          .filter((c) => c.n > 0)
+          .map((c) => (
+            <span key={c.key} className={cn("inline-flex items-center gap-1 font-medium", c.text)}>
+              <span className={cn("w-2 h-2 rounded-full", c.cls)} />
+              {c.label} {c.n}
+            </span>
+          ))}
+      </div>
+    </Card>
+  )
 }
 
 export function GradingControlPanel({
@@ -100,6 +143,24 @@ export function GradingControlPanel({
     : normalizeWeakPoints(submission.weak_points as any)
 
   const scoreBreakdown = useMemo(() => buildScoreBreakdown(aiField), [aiField])
+  const questionVerdicts = useMemo(() => toQuestionVerdicts(aiField), [aiField])
+
+  /** 教师对 uncertain 题裁决后：写回 verdicts 并同步 summary 计数 */
+  function handleVerdictsChange(next: AIQuestionVerdict[]) {
+    if (!v2) return
+    const count = (s: AIQuestionVerdict["verdict"]) => next.filter((x) => x.verdict === s).length
+    onAiFieldChange({
+      ...v2,
+      question_verdicts: next,
+      summary: {
+        ...v2.summary,
+        correct_count: count("correct"),
+        wrong_count: count("wrong") + count("unanswered"),
+        partial_count: count("partial"),
+        uncertain_count: count("uncertain"),
+      },
+    })
+  }
 
   // 是否对照了教师标准答案：优先看批改结果的 model 标记，回退看任务是否配置了答案
   const usedAnswerKey = useMemo(() => {
@@ -241,7 +302,7 @@ export function GradingControlPanel({
             <div className="flex-1">
               <div className="text-sm font-medium">AI 批阅控制台</div>
               <div className="text-[11px] text-muted-foreground">
-                Claude Opus 4.7 · Visual Grounding · 学科自适应
+                Qwen3-VL · 原卷留痕 · 置信度分流 · 学科自适应
               </div>
             </div>
           </div>
@@ -304,6 +365,16 @@ export function GradingControlPanel({
             </div>
           )}
         </Card>
+
+        {/* 逐题判定统计：对/错/半对/待裁决 一眼总览 */}
+        {phase === "done" && questionVerdicts.length > 0 ? (
+          <VerdictStats verdicts={questionVerdicts} />
+        ) : null}
+
+        {/* 待人工裁决：AI 低置信度题的教师改判入口（置信度分流闭环） */}
+        {phase === "done" && questionVerdicts.length > 0 ? (
+          <UncertainReviewPanel verdicts={questionVerdicts} onVerdictsChange={handleVerdictsChange} />
+        ) : null}
 
         {/* 五维雷达 */}
         {phase === "done" && v2 ? (

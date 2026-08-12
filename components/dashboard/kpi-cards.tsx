@@ -55,12 +55,27 @@ export function KpiCards({ data }: { data: KpiData }) {
     ai: "bg-accent text-accent-foreground",
   }
 
+  // 比率类指标附带进度条，数值类不带
+  const progressMap: Record<string, number | null> = {
+    应交总数: null,
+    实交总数: submitRate,
+    "AI 批改完成率": gradeRate,
+    班级平均分: data.averageScore,
+  }
+  const barColorMap = {
+    primary: "bg-primary",
+    success: "bg-[color:var(--success)]",
+    warning: "bg-[color:var(--warning)]",
+    ai: "bg-primary",
+  }
+
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
       {items.map((item) => {
         const Icon = item.icon
+        const progress = progressMap[item.label]
         return (
-          <Card key={item.label} className="p-5 gap-3">
+          <Card key={item.label} className="p-5 gap-3 relative overflow-hidden">
             <div className="flex items-start justify-between">
               <span className="text-sm text-muted-foreground">{item.label}</span>
               <div className={cn("flex items-center justify-center w-8 h-8 rounded-md", accentMap[item.accent])}>
@@ -72,6 +87,15 @@ export function KpiCards({ data }: { data: KpiData }) {
               {item.unit && <span className="text-sm text-muted-foreground">{item.unit}</span>}
             </div>
             <div className="text-xs text-muted-foreground truncate">{item.hint}</div>
+            {/* 比率指标底部细进度条：一眼看出完成程度 */}
+            {progress != null ? (
+              <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-muted" aria-hidden="true">
+                <div
+                  className={cn("h-full transition-all duration-700", barColorMap[item.accent])}
+                  style={{ width: `${Math.max(0, Math.min(100, progress))}%` }}
+                />
+              </div>
+            ) : null}
           </Card>
         )
       })}

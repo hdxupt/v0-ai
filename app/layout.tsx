@@ -48,7 +48,7 @@ export default async function RootLayout({
   return (
     <html
       lang="zh-CN"
-      className={`${geistSans.variable} ${geistMono.variable} bg-background`}
+      className={`${geistSans.variable} ${geistMono.variable} ${notoSansSC.variable} bg-background`}
       suppressHydrationWarning
     >
       <body className="font-sans antialiased">

@@ -94,8 +94,13 @@ export function parseAiComment(raw: string | null | undefined): AiCommentStructu
   }
   if (!raw) return empty
 
-  // 把所有空白塌缩成单空格，方便后续切片
-  const t = raw.replace(/\s+/g, " ").trim()
+  // 把所有空白塌缩成单空格，方便后续切片；顺带剥掉 AI 常写的 Markdown 加粗/标题记号
+  // （结构化展示不渲染 Markdown，星号原样露出很难看）
+  const t = raw
+    .replace(/\*\*/g, "")
+    .replace(/^#+\s*/gm, "")
+    .replace(/\s+/g, " ")
+    .trim()
   if (!t) return empty
 
   // ---------- 1. 定位三大锚点 ----------
@@ -199,7 +204,7 @@ export function parseAiComment(raw: string | null | undefined): AiCommentStructu
   let action = ""
   let effectiveActionMark = actionMark
   if (problemPattern === "num" && problems.length > 0) {
-    // 整段尾部减去 encouragement 段后的纯尾巴
+    // 整段尾���减去 encouragement 段后的纯尾巴
     const tail = encMark > firstMark ? t.slice(firstMark, encMark) : t.slice(firstMark)
     // 把最后一道题的标题在 tail 中再次定位，然后只搜它之后的部分
     const lastIdx = problems[problems.length - 1].index

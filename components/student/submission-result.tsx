@@ -183,7 +183,9 @@ function GradedView({ submission, task }: { submission: Submission; task: Task }
             <MessageCircle className="w-4 h-4 text-primary" />
             <h3 className="text-sm font-medium">{task.teacher_name}评语</h3>
           </div>
-          <p className="text-sm leading-relaxed text-foreground/90">{submission.teacher_comment}</p>
+          <p className="text-sm leading-relaxed text-foreground/90 whitespace-pre-line">
+            {renderInlineBold(submission.teacher_comment)}
+          </p>
         </Card>
       )}
 
@@ -272,6 +274,24 @@ function GradedView({ submission, task }: { submission: Submission; task: Task }
  * 把 ai_issues v2 的 correction_details 转成 transcript panel 用的精简注解列表。
  * id 与 viewerBoxes ���源，使 hover 联动统一。
  */
+/**
+ * 评语轻量 Markdown 渲染：AI 生成的评语常带 **加粗**，
+ * 之前按纯文本渲染星号会原样露出。只处理加粗，其余保持纯文本。
+ */
+function renderInlineBold(text: string): React.ReactNode {
+  const parts = text.split(/\*\*([^*]+)\*\*/g)
+  if (parts.length === 1) return text
+  return parts.map((part, i) =>
+    i % 2 === 1 ? (
+      <strong key={i} className="font-semibold text-foreground">
+        {part}
+      </strong>
+    ) : (
+      part
+    ),
+  )
+}
+
 function buildTranscriptAnnotations(
   aiIssues: Submission["ai_issues"],
   _viewerBoxes: ViewerBox[],

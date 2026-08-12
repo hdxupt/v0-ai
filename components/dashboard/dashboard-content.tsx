@@ -155,11 +155,11 @@ export function DashboardContent() {
             <h1 className="text-2xl font-semibold tracking-tight text-balance">AI 智能学情看板</h1>
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-accent text-accent-foreground text-[11px] font-medium">
               <Sparkles className="w-3 h-3" />
-              AI 驱动
+              原卷留痕批改
             </span>
           </div>
           <p className="text-sm text-muted-foreground text-pretty">
-            {user.name}，欢迎回来。所有数据通过 Supabase 实时同步至学生端
+            {user.name}，欢迎回来。批改结果与学情数据实时同步到学生端
           </p>
         </div>
 

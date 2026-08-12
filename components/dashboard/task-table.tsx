@@ -52,6 +52,16 @@ interface TaskTableProps {
 
 type FilterKey = "all" | "pending" | "completed"
 
+/** 学科识别色：与图表色板对应，跨页面保持一致 */
+function subjectColor(subject: string): string {
+  if (subject.includes("数")) return "var(--chart-1)"
+  if (subject.includes("语文")) return "var(--chart-5)"
+  if (subject.includes("英")) return "var(--chart-3)"
+  if (subject.includes("物理")) return "var(--chart-2)"
+  if (subject.includes("化")) return "var(--chart-4)"
+  return "var(--muted-foreground)"
+}
+
 function statusBadge(row: TaskRowData) {
   const total = row.task.target_student_count || 0
   const submitted = row.submissions.length
@@ -179,6 +189,11 @@ export function TaskTable({ rows, teacherName, teacherId }: TaskTableProps) {
                         {task.title}
                       </Link>
                       <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-0.5">
+                        <span
+                          className="w-1.5 h-1.5 rounded-full shrink-0"
+                          style={{ backgroundColor: subjectColor(task.subject) }}
+                          aria-hidden="true"
+                        />
                         <span>{task.subject}</span>
                         <span>·</span>
                         <span>{task.class_ids.length === 1 ? "1 个班级" : `${task.class_ids.length} 个班级`}</span>

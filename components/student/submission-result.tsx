@@ -8,8 +8,17 @@ import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils"
 import { formatRelativeTime } from "@/lib/format"
-import { toViewerBoxes, normalizeWeakPoints, type Submission, type Task, type ViewerBox } from "@/lib/types"
+import {
+  toViewerBoxes,
+  toQuestionVerdicts,
+  normalizeWeakPoints,
+  type Submission,
+  type Task,
+  type ViewerBox,
+  type AIQuestionVerdict,
+} from "@/lib/types"
 import { isAIGradingV2, buildScoreBreakdown } from "@/lib/types"
+import { RedPenOverlay } from "@/components/grading/red-pen-overlay"
 import { toFileSrc } from "@/lib/blob-url"
 import { AiCommentStructured } from "@/components/student/ai-comment-structured"
 import { AnnotationDetailList } from "@/components/student/annotation-detail-list"
@@ -98,6 +107,7 @@ function GradedView({ submission, task }: { submission: Submission; task: Task }
   const passLevel = scorePercent >= 60
   const excellent = scorePercent >= 85
   const viewerBoxes = toViewerBoxes(submission.ai_issues)
+  const verdicts = toQuestionVerdicts(submission.ai_issues)
   const weakPoints = normalizeWeakPoints(submission.weak_points)
   const scoreBreakdown = buildScoreBreakdown(submission.ai_issues)
   /** 与图片 bbox 共享的高亮状态：null 表示无悬停 */
@@ -224,6 +234,7 @@ function GradedView({ submission, task }: { submission: Submission; task: Task }
             <ImageGallery
               pathnames={submission.image_urls}
               annotations={viewerBoxes}
+              verdicts={verdicts}
               activeBoxId={activeBoxId}
               onHoverBox={setActiveBoxId}
             />
@@ -259,7 +270,7 @@ function GradedView({ submission, task }: { submission: Submission; task: Task }
 
 /**
  * 把 ai_issues v2 的 correction_details 转成 transcript panel 用的精简注解列表。
- * id 与 viewerBoxes 同源，使 hover 联动统一。
+ * id 与 viewerBoxes ���源，使 hover 联动统一。
  */
 function buildTranscriptAnnotations(
   aiIssues: Submission["ai_issues"],
@@ -279,11 +290,13 @@ function buildTranscriptAnnotations(
 function ImageGallery({
   pathnames,
   annotations,
+  verdicts = [],
   activeBoxId,
   onHoverBox,
 }: {
   pathnames: string[]
   annotations?: ViewerBox[]
+  verdicts?: AIQuestionVerdict[]
   activeBoxId?: string | null
   onHoverBox?: (id: string | null) => void
 }) {
@@ -297,9 +310,13 @@ function ImageGallery({
 
   return (
     <div className="space-y-3">
-      <div className="relative rounded-lg overflow-hidden border border-border bg-muted aspect-[4/3]">
+      {/* 容器贴合图片实际尺寸，保证百分比坐标（批注框 + 红笔留痕）与图片内容精确对齐 */}
+      <div className="rounded-lg overflow-hidden border border-border bg-muted flex justify-center">
+        <div className="relative">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={toFileSrc(src)} alt="答卷图片" className="w-full h-full object-contain" />
+        <img src={toFileSrc(src)} alt="答卷图片" className="block max-w-full max-h-[75vh] w-auto h-auto" />
+        {/* 红笔留痕：逐小题 ✓/✗/半对，跟随学生作答位置（verdicts 自带页码，支持多页） */}
+        {verdicts.length > 0 && <RedPenOverlay verdicts={verdicts} pageIndex={activeIdx} />}
         {/* Render AI issue boxes only on first image for simplicity */}
           {activeIdx === 0 &&
             annotations?.map((box, idx) => {
@@ -364,6 +381,7 @@ function ImageGallery({
                 </div>
               )
             })}
+        </div>
       </div>
       {pathnames.length > 1 && (
         <div className="flex gap-2 overflow-x-auto">

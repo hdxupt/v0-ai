@@ -4,7 +4,7 @@ import { useState } from "react"
 import { GradingImageViewer } from "./grading-image-viewer"
 import { GradingControlPanel } from "./grading-control-panel"
 import type { Submission, Task, AppUser, ViewerBox, AIIssuesField } from "@/lib/types"
-import { toViewerBoxes } from "@/lib/types"
+import { toViewerBoxes, toQuestionVerdicts } from "@/lib/types"
 
 interface Props {
   submission: Submission
@@ -26,6 +26,7 @@ export function GradingWorkspace({ submission, task, student, teacher }: Props) 
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
 
   const boxes: ViewerBox[] = toViewerBoxes(aiField)
+  const verdicts = toQuestionVerdicts(aiField)
 
   return (
     <div className="flex h-[calc(100vh-7rem)] min-h-[640px]">
@@ -33,6 +34,7 @@ export function GradingWorkspace({ submission, task, student, teacher }: Props) 
         <GradingImageViewer
           imageUrls={submission.image_urls}
           boxes={boxes}
+          verdicts={verdicts}
           showAnnotations={showAnnotations}
           currentIndex={currentImageIndex}
           onIndexChange={setCurrentImageIndex}

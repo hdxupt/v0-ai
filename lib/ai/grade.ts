@@ -1,6 +1,6 @@
 import { generateObject } from "ai"
 import { get } from "@vercel/blob"
-import type { Submission, Task } from "@/lib/types"
+import type { Submission, Task, AIQuestionVerdict } from "@/lib/types"
 import {
   buildGradeSystemPrompt,
   buildGradeUserPrompt,
@@ -60,9 +60,14 @@ export interface AIGradePayload {
     version: 2
     model: string
     graded_subject: ReturnType<typeof resolveSubject>
-    summary: GradingResult["summary"]
+    summary: GradingResult["summary"] & {
+      partial_count?: number
+      uncertain_count?: number
+    }
     correction_details: GradingResult["correction_details"]
     radar_analysis: GradingResult["radar_analysis"]
+    /** 逐小题判定（新 VLM 链路产出）——原卷红笔留痕的数据源 */
+    question_verdicts?: AIQuestionVerdict[]
   }
   /**
    * 本次批改使用的 OCR 数据。
@@ -201,7 +206,7 @@ export async function gradeSubmissionWithAI(
       object = result.object
     } catch (e: any) {
       // generateObject 不会跑我们 schema 上的 z.preprocess（它直接调底层 validate）。
-      // Claude 在输出长 JSON 时偶尔会把嵌套数组序列化为字符串，导致 AI_TypeValidationError。
+      // Claude 在输出长 JSON 时偶尔��把嵌套数组序列化为字符串，导致 AI_TypeValidationError。
       // 此时从 e.cause.value 拿到原始对象，用 schema.parse() 走我们的 preprocess 修复。
       const rawValue =
         e?.cause?.value ?? e?.value ?? e?.cause?.text ?? e?.text ?? null

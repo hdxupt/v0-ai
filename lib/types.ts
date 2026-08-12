@@ -96,6 +96,37 @@ export interface AIRadarAnalysis {
   presentation: number
 }
 
+/* ============================== 逐小题判定（原卷红笔留痕数据源） ============================== */
+
+/**
+ * 每道小题的判定状态：
+ * - correct    全对 → 红笔 ✓
+ * - wrong      错   → 红笔 ✗ + 正确答案
+ * - partial    半对 → 半对号 + 得分
+ * - unanswered 未作答 → 漏做标记
+ * - uncertain  字迹无法辨认/置信度不足 → 转教师人工批改（AI 知道自己不知道）
+ */
+export type VerdictStatus = "correct" | "wrong" | "partial" | "unanswered" | "uncertain"
+
+export interface AIQuestionVerdict {
+  id: number
+  /** 题号文本，如 "6"、"(2)"、"三、1" */
+  label?: string
+  verdict: VerdictStatus
+  /** 学生作答内容的位置 [y, x, h, w]，0~100 全局百分比。留痕符号挂在该区域右侧 */
+  answer_box: [number, number, number, number]
+  page_index: number
+  /** verdict=wrong 时的简短正确答案（如 "B"、"turn off"） */
+  correct_answer?: string
+  /** verdict=partial 时的得分文本，如 "2/4" */
+  score_text?: string
+  /** 判定置信度 0~1。低于阈值时 verdict 被置为 uncertain */
+  confidence: number
+}
+
+/** 置信度分流阈值：低于此值的判定转教师人工批改 */
+export const VERDICT_CONFIDENCE_THRESHOLD = 0.6
+
 export interface AIGradingV2 {
   version: 2
   model: string
@@ -106,9 +137,15 @@ export interface AIGradingV2 {
     wrong_count: number
     total_detected_questions: number
     weak_points: string[]
+    /** 半对题数（可选，新链路产出） */
+    partial_count?: number
+    /** 转人工题数：字迹无法辨认/低置信度（可选，新链路产出） */
+    uncertain_count?: number
   }
   correction_details: AICorrectionDetail[]
   radar_analysis: AIRadarAnalysis
+  /** 逐小题判定（可选，新链路产出）——原卷红笔留痕的数据源 */
+  question_verdicts?: AIQuestionVerdict[]
 }
 
 /** ai_issues 字段在 DB 中可以是 v1 数组或 v2 对象 */
@@ -260,6 +297,14 @@ export function toViewerBoxes(field: AIIssuesField | null | undefined): ViewerBo
     }))
   }
   return []
+}
+
+/** 从 ai_issues 提取逐小题判定（红笔留痕数据）。非 v2 或无 verdicts 时返回空数组。 */
+export function toQuestionVerdicts(field: AIIssuesField | null | undefined): AIQuestionVerdict[] {
+  if (!field || !isAIGradingV2(field)) return []
+  const verdicts = (field as AIGradingV2).question_verdicts
+  if (!Array.isArray(verdicts)) return []
+  return verdicts.filter((v) => Array.isArray(v.answer_box) && v.answer_box.length === 4)
 }
 
 /* ============================== 评分可追溯（Score Provenance） ============================== */

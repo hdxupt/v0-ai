@@ -16,10 +16,11 @@ import {
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
-import type { ViewerBox } from "@/lib/types"
+import type { ViewerBox, AIQuestionVerdict } from "@/lib/types"
 import { formatDateTime } from "@/lib/format"
 import { toFileSrc } from "@/lib/blob-url"
 import { WavyUnderline } from "@/components/grading/annotation-marker"
+import { RedPenOverlay } from "@/components/grading/red-pen-overlay"
 
 /**
  * 按 bbox type 选样式。
@@ -71,6 +72,8 @@ const TYPE_STYLE = {
 interface Props {
   imageUrls: string[]
   boxes: ViewerBox[]
+  /** 逐小题判定（红笔留痕）。有值时在原卷上渲染 ✓/✗/半对 */
+  verdicts?: AIQuestionVerdict[]
   showAnnotations: boolean
   currentIndex: number
   onIndexChange: (idx: number) => void
@@ -81,6 +84,7 @@ interface Props {
 export function GradingImageViewer({
   imageUrls,
   boxes,
+  verdicts = [],
   showAnnotations,
   currentIndex,
   onIndexChange,
@@ -95,6 +99,8 @@ export function GradingImageViewer({
   // For now annotations are shown only on the first page (model returns 100x100 coords for the first image).
   // 多图时仍可叠加在第一页，避免错位。
   const visibleBoxes = currentIndex === 0 && showAnnotations ? boxes : []
+  // verdicts 自带 page_index，天然支持多页
+  const hasVerdicts = verdicts.length > 0
 
   return (
     <div className="flex flex-col h-full bg-muted/40 border-r border-border">
@@ -195,6 +201,10 @@ export function GradingImageViewer({
                 暂无图片
               </div>
             )}
+
+            {hasVerdicts && showAnnotations ? (
+              <RedPenOverlay verdicts={verdicts} pageIndex={currentIndex} />
+            ) : null}
 
             {visibleBoxes.map((box, idx) => {
               const style = TYPE_STYLE[box.type] ?? TYPE_STYLE.error

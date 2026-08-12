@@ -1,5 +1,6 @@
 import "server-only"
-import type { Submission, Task } from "@/lib/types"
+import type { Submission, Task, AIQuestionVerdict, VerdictStatus } from "@/lib/types"
+import { VERDICT_CONFIDENCE_THRESHOLD } from "@/lib/types"
 import { resolveSubject } from "./prompts"
 import type { AIGradePayload } from "./grade"
 import type {
@@ -55,7 +56,17 @@ interface RawIssue {
   confidence?: number
 }
 
+interface RawVerdict {
+  label?: string
+  verdict?: string
+  answer_bbox_2d?: number[]
+  correct_answer?: string
+  score_text?: string
+  confidence?: number
+}
+
 interface BlockGradeResult {
+  verdicts?: RawVerdict[]
   issues: RawIssue[]
 }
 
@@ -97,7 +108,19 @@ function blockGradePrompt(type: BlockType, subjectHint: string, answerCtx?: stri
   // 通用抗干扰指令：隔绝纸张背景与无关杂物，只判作答本身
   const NOISE_GUARD = `【看图须知】只针对学生的"作答内容"判分。请主动忽略：纸张阴影/折痕、背面透出的笔迹、扫描噪点、装订线/打印框线、与本题作答无关的涂鸦或污渍。若某处是上述杂物而非作答，不要当作错误。`
 
-  const COMMON_TAIL = `${NOISE_GUARD}${ANSWER_BLOCK}
+  // 逐小题判定：原卷红笔留痕（✓/✗/半对）的数据源。所有题型通用。
+  const VERDICT_BLOCK = `
+【逐小题判定 verdicts（必填，用于在原卷上打红笔勾叉）】
+除了 issues，你还必须输出 "verdicts" 数组：把这张小图里的每一道小题逐一判定（客观题每小题一条；解答大题整题一条；作文整篇一条）：
+- "label": 题号文本（如 "6"、"(2)"），看不清给 ""
+- "verdict": "correct"(完全正确) | "wrong"(错误) | "partial"(半对/有过程分) | "unanswered"(未作答)
+- "answer_bbox_2d": [x1,y1,x2,y2] —— 紧贴【学生作答内容本身】的位置（选择题是括号里写的字母，填空题是手写的答案，解答题是整个解答过程），不要框题干
+- "correct_answer": verdict=wrong 时必填，给最简短的正确答案（选择题就一个字母如 "B"；填空给正确词），≤15字
+- "score_text": verdict=partial 时给该题得分，格式 "得分/满分" 如 "2/4"
+- "confidence": 0~1，你对这个判定的把握程度。【诚实原则】如果学生字迹潦草到你无法确认他写的是什么，不要猜，直接给低置信度（<0.6），系统会把这道题转交老师人工批改——宁可交给老师，不可乱判。
+`
+
+  const COMMON_TAIL = `${NOISE_GUARD}${ANSWER_BLOCK}${VERDICT_BLOCK}
 对每一处问题输出一个对象：
 - "type": "error"(错) | "partial"(半对) | "highlight"(亮点) | "missing"(漏做)
 - "question_text": 简要题干或学生原句（≤40字）
@@ -108,7 +131,7 @@ function blockGradePrompt(type: BlockType, subjectHint: string, answerCtx?: stri
 - "bbox_2d": [x1,y1,x2,y2] 错误位置（1000 网格，相对这张小图）
 - "confidence": 0~1
 ${COORD}
-严格只返回 JSON：{"issues":[ ... ]}，不要任何解释文字。`
+严格只返回 JSON：{"verdicts":[ ... ], "issues":[ ... ]}，不要任何解释文字。全对的小题也要出现在 verdicts 里（verdict="correct"），但不需要出现在 issues 里。`
 
   switch (type) {
     case "math":
@@ -132,17 +155,22 @@ ${COMMON_TAIL}`
   }
 }
 
-/** 对单个题块批改，返回换算回全局坐标的 CorrectionDetail 片段（不含全局 id）。 */
+interface BlockGradeOutput {
+  details: Omit<CorrectionDetail, "id">[]
+  verdicts: Omit<AIQuestionVerdict, "id">[]
+}
+
+/** 对单个题块批改，返回换算回全局坐标的批注明细 + 逐小题判定（均不含全局 id）。 */
 async function gradeBlock(
   block: QuestionBlock,
   pageBuffer: Buffer,
   subjectHint: string,
   answerCtx?: string,
-): Promise<Omit<CorrectionDetail, "id">[]> {
+): Promise<BlockGradeOutput> {
   // 裁剪出题块小图（数学/作文需精确定位，裁剪后定位更准）
   // 复用已下载的整页 Buffer，避免对同一页重复下载
   const cropped = await cropRegionFromBuffer(pageBuffer, block.region, 3)
-  if (!cropped) return []
+  if (!cropped) return { details: [], verdicts: [] }
 
   const prompt = blockGradePrompt(block.type, subjectHint, answerCtx)
   const messages: QwenMessage[] = [
@@ -163,11 +191,50 @@ async function gradeBlock(
     })
   } catch (e: any) {
     console.error("[v0] gradeBlock failed, block", block.index, e?.message)
-    return []
+    return { details: [], verdicts: [] }
   }
 
   const issues = Array.isArray(result?.issues) ? result.issues : []
+  const rawVerdicts = Array.isArray(result?.verdicts) ? result.verdicts : []
   const out: Omit<CorrectionDetail, "id">[] = []
+
+  /* ---- 解析逐小题判定：坐标换算 + 置信度分流 ---- */
+  const verdicts: Omit<AIQuestionVerdict, "id">[] = []
+  for (const v of rawVerdicts) {
+    const localPct = qwenBoxToPercent(v.answer_bbox_2d ?? [])
+    // 没有作答区坐标的判定无法留痕，退化到整个题块区域
+    const region = localPct ? localBoxToGlobal(localPct, cropped.region) : block.region
+    if (!region) continue
+
+    const conf =
+      typeof v.confidence === "number" ? Math.max(0, Math.min(1, v.confidence)) : 0.8
+    let status: VerdictStatus
+    switch (v.verdict) {
+      case "correct":
+      case "wrong":
+      case "partial":
+      case "unanswered":
+        status = v.verdict
+        break
+      default:
+        status = "uncertain"
+    }
+    // 置信度分流：AI 把握不足 → 转教师人工批改（unanswered 不分流，空白不需要辨认）
+    if (conf < VERDICT_CONFIDENCE_THRESHOLD && status !== "unanswered") {
+      status = "uncertain"
+    }
+
+    verdicts.push({
+      label: v.label?.trim() || undefined,
+      verdict: status,
+      answer_box: [region[0], region[1], region[2], region[3]],
+      page_index: block.page_index,
+      correct_answer:
+        status === "wrong" && v.correct_answer ? v.correct_answer.slice(0, 30) : undefined,
+      score_text: status === "partial" && v.score_text ? v.score_text.slice(0, 12) : undefined,
+      confidence: conf,
+    })
+  }
 
   // 题型分类：客观题（填空/选择/判断）→ 标签标注；其余 → 波浪下划线
   const questionType: "objective" | "subjective" = block.type === "objective" ? "objective" : "subjective"
@@ -201,7 +268,7 @@ async function gradeBlock(
       confidence: typeof it.confidence === "number" ? Math.max(0, Math.min(1, it.confidence)) : 0.8,
     })
   }
-  return out
+  return { details: out, verdicts }
 }
 
 /* ----------------------- 聚合：评语 + 雷达 ----------------------- */
@@ -356,17 +423,37 @@ export async function gradeSubmissionWithVLM(
   )
 
   const details: Omit<CorrectionDetail, "id">[] = []
+  const verdictsRaw: Omit<AIQuestionVerdict, "id">[] = []
   for (const r of blockResults) {
-    if (r.ok) details.push(...r.value)
+    if (r.ok) {
+      details.push(...r.value.details)
+      verdictsRaw.push(...r.value.verdicts)
+    }
   }
-  console.log("[v0] grade-vlm: collected", details.length, "issue(s)")
+  console.log(
+    "[v0] grade-vlm: collected",
+    details.length,
+    "issue(s),",
+    verdictsRaw.length,
+    "verdict(s)",
+  )
 
-  /* ---------- Stage 2.5：算分与计数 ---------- */
+  /* ---------- Stage 2.5：算分与计数（verdicts 可用时以其为准） ---------- */
   const deltaSum = details.reduce((s, d) => s + (d.score_delta ?? 0), 0)
   const totalScore = Math.max(0, Math.min(100, 100 + deltaSum))
-  const wrongCount = details.filter((d) => d.type === "error" || d.type === "missing").length
-  const partialCount = details.filter((d) => d.type === "partial").length
-  const detectedQuestions = allBlocks.length
+  const countBy = (s: VerdictStatus) => verdictsRaw.filter((v) => v.verdict === s).length
+  const hasVerdicts = verdictsRaw.length > 0
+  const wrongCount = hasVerdicts
+    ? countBy("wrong") + countBy("unanswered")
+    : details.filter((d) => d.type === "error" || d.type === "missing").length
+  const partialCount = hasVerdicts
+    ? countBy("partial")
+    : details.filter((d) => d.type === "partial").length
+  const uncertainCount = countBy("uncertain")
+  const detectedQuestions = hasVerdicts ? verdictsRaw.length : allBlocks.length
+  if (uncertainCount > 0) {
+    console.log("[v0] grade-vlm:", uncertainCount, "verdict(s) routed to teacher (low confidence)")
+  }
 
   /* ---------- Stage 3：聚合评语 + 雷达 ---------- */
   const agg = await aggregate(submission.student_name, subjectHint, details, totalScore)
@@ -377,12 +464,22 @@ export async function gradeSubmissionWithVLM(
     id: i + 1,
   }))
 
-  const summary: GradingResult["summary"] = {
+  // 赋 verdict 全局 id
+  const questionVerdicts: AIQuestionVerdict[] = verdictsRaw.map((v, i) => ({
+    ...v,
+    id: i + 1,
+  }))
+
+  const summary = {
     total_score: totalScore,
-    correct_count: Math.max(0, detectedQuestions - wrongCount - partialCount),
+    correct_count: hasVerdicts
+      ? countBy("correct")
+      : Math.max(0, detectedQuestions - wrongCount - partialCount),
     wrong_count: wrongCount,
     total_detected_questions: detectedQuestions,
     weak_points: agg.weak_points,
+    partial_count: partialCount,
+    uncertain_count: uncertainCount,
   }
 
   return {
@@ -396,6 +493,7 @@ export async function gradeSubmissionWithVLM(
       summary,
       correction_details: correctionDetails,
       radar_analysis: agg.radar_analysis,
+      question_verdicts: questionVerdicts,
     },
     // 新链路不产 OCR 数据；不影响落库（字段可空），重批改会重新走
     ocr_data: null,

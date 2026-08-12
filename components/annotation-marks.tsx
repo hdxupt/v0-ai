@@ -42,18 +42,19 @@ function HandCross({ size }: { size: number }) {
 }
 
 function HandHalf({ size }: { size: number }) {
+  /* 用户指定形状：长尾对勾延伸至右上，一撇从左上斜穿勾尾（交叉点在上半部） */
   return (
-    <svg width={size} height={size * 0.82} viewBox="0 0 34 28" fill="none" aria-hidden="true">
-      {/* 对勾 */}
+    <svg width={size * 1.05} height={size} viewBox="0 0 36 34" fill="none" aria-hidden="true">
+      {/* 长尾对勾：左下短笔 + 长尾一路扬到右上角 */}
       <path
-        d="M3.5 15.5 C6.5 18 8.8 21.5 10.6 24 C14.2 16.5 21.5 7 31 3.2"
+        d="M3 24.5 C5.5 27 7.4 29.5 9 31.5 C14 22 22 10 33 3"
         stroke={RED}
-        strokeWidth="3.4"
+        strokeWidth="3.6"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      {/* 斜杠划过勾尾，表示半对 */}
-      <path d="M18 22 C21 16.5 24 11 26.5 6" stroke={RED} strokeWidth="3" strokeLinecap="round" />
+      {/* 一撇：从左上向右下斜穿勾尾 */}
+      <path d="M15.5 3.5 C19.5 9.5 23.5 15.5 27 21.5" stroke={RED} strokeWidth="3.3" strokeLinecap="round" />
     </svg>
   )
 }

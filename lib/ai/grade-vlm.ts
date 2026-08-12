@@ -118,6 +118,7 @@ function blockGradePrompt(type: BlockType, subjectHint: string, answerCtx?: stri
 - "correct_answer": verdict=wrong 时必填，给最简短的正确答案（选择题就一个字母如 "B"；填空给正确词），≤15字
 - "score_text": verdict=partial 时给该题得分，格式 "得分/满分" 如 "2/4"
 - "confidence": 0~1，你对这个判定的把握程度。【诚实原则】如果学生字迹潦草到你无法确认他写的是什么，不要猜，直接给低置信度（<0.6），系统会把这道题转交老师人工批改——宁可交给老师，不可乱判。
+注意：只对【真实的小题】输出判定。栏目标题（如"提升练"）、页眉页脚、装饰文字、空白区域一律不要输出 verdict；同一道小题只输出一条，不要重复。
 `
 
   const COMMON_TAIL = `${NOISE_GUARD}${ANSWER_BLOCK}${VERDICT_BLOCK}
@@ -187,7 +188,8 @@ async function gradeBlock(
   try {
     result = await callQwenJSON<BlockGradeResult>(messages, {
       temperature: 0,
-      maxTokens: 3200,
+      // verdicts 输出使 token 用量上升，3200 实测会截断（金标准英语卷 block 11）
+      maxTokens: 4500,
     })
   } catch (e: any) {
     console.error("[v0] gradeBlock failed, block", block.index, e?.message)
@@ -390,20 +392,32 @@ async function buildAnswerContext(task: Task): Promise<string | undefined> {
 
 /* ----------------------- 主编排 ----------------------- */
 
-/** 两个作答区 [y,x,h,w]（百分比）的 IoU */
-function verdictIoU(a: [number, number, number, number], b: [number, number, number, number]): number {
+/**
+ * 两个作答区 [y,x,h,w]（百分比）的重叠度。
+ * 取 IoU 与「交集/较小框面积」的较大者：后者能捕捉大小框嵌套的情况
+ * （金标准英语卷实测：同一小题两次判定框 2×9 与 2×3，IoU 仅 0.33 但小框几乎被完全覆盖）。
+ */
+function verdictOverlap(a: [number, number, number, number], b: [number, number, number, number]): number {
   const [ay, ax, ah, aw] = a
   const [by, bx, bh, bw] = b
   const ix = Math.max(0, Math.min(ax + aw, bx + bw) - Math.max(ax, bx))
   const iy = Math.max(0, Math.min(ay + ah, by + bh) - Math.max(ay, by))
   const inter = ix * iy
-  const union = ah * aw + bh * bw - inter
-  return union > 0 ? inter / union : 0
+  if (inter <= 0) return 0
+  const areaA = ah * aw
+  const areaB = bh * bw
+  const union = areaA + areaB - inter
+  const iou = union > 0 ? inter / union : 0
+  const minArea = Math.min(areaA, areaB)
+  const containment = minArea > 0 ? inter / minArea : 0
+  return Math.max(iou, containment)
 }
 
 /**
- * 判定空间去重：同页内作答区 IoU ≥ 0.45 视为同一小题被重复判定，
- * 保留置信度最高的一条（并列时保留更严格的判定，避免漏掉错误）。
+ * 判定清洗 + 空间去重：
+ * 1. 丢弃退化框（高或宽 <0.5%）——金标准语文卷实测会产出零面积的 "unanswered" 噪声判定；
+ * 2. 同页内重叠度 ≥ 0.6（IoU 或嵌套覆盖率）视为同一小题被相邻题块重复判定，
+ *    保留置信度最高的一条（并列时保留更严格的判定，避免漏掉错误）。
  */
 function dedupeVerdicts(
   verdicts: Omit<AIQuestionVerdict, "id">[],
@@ -417,8 +431,10 @@ function dedupeVerdicts(
   }
   const kept: Omit<AIQuestionVerdict, "id">[] = []
   for (const v of verdicts) {
+    const [, , h, w] = v.answer_box
+    if (h < 0.5 || w < 0.5) continue // 退化框：不是真实作答区
     const clashIdx = kept.findIndex(
-      (k) => k.page_index === v.page_index && verdictIoU(k.answer_box, v.answer_box) >= 0.45,
+      (k) => k.page_index === v.page_index && verdictOverlap(k.answer_box, v.answer_box) >= 0.6,
     )
     if (clashIdx === -1) {
       kept.push(v)

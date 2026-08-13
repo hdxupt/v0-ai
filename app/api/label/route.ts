@@ -19,14 +19,17 @@ export async function GET(request: NextRequest) {
   const { data, error } = await sb
     .from("label_samples")
     .select(
-      "id, crop_url, question_text, correct_answer, ai_type, ai_analysis, label, student_answer, submission_id, detail_index",
+      "id, crop_url, question_text, correct_answer, ai_type, ai_analysis, label, student_answer, submission_id, detail_index, quality, locate_method, matched_text, source_image_url",
     )
+    // good（文字内容定位，最可信）排前面，review（坐标吸附，位置可能偏）排后面
+    .order("quality", { ascending: true })
     .order("id", { ascending: true })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   const done = data.filter((d) => d.label).length
-  return NextResponse.json({ samples: data, total: data.length, done })
+  const goodTotal = data.filter((d) => d.quality === "good").length
+  return NextResponse.json({ samples: data, total: data.length, done, goodTotal })
 }
 
 /** 保存单条标注 */

@@ -213,7 +213,7 @@ function locateByText(lines, query) {
 
 /**
  * 收窄命中行集合。滑动窗口可能横跨不相邻的行、甚至跨到另一栏
- * （数学卷常是双栏排版），直接求并集会裁出跨栏的巨图。
+ * （数学卷��是双栏排版），直接求并集会裁出跨栏的巨图。
  * 这里以「最像 query 的那一行」为锚，只保留同一栏、纵向邻近的连续行。
  */
 function refineLines(lines, idxs, query) {
@@ -548,7 +548,9 @@ async function main() {
           ai_analysis: r.ai_analysis,
           locate_method: r.locate_method,
           locate_score: r.locate_score,
-          ocr_text: r.matched_text,
+          matched_text: r.matched_text,
+          quality: r.quality,
+          line_count: r.line_count,
         },
         { onConflict: "submission_id,detail_index" },
       )

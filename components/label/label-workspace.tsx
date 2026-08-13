@@ -16,6 +16,10 @@ type Sample = {
   ai_analysis: string | null
   label: string | null
   student_answer: string | null
+  quality: "good" | "review" | null
+  locate_method: string | null
+  matched_text: string | null
+  source_image_url?: string | null
 }
 
 const LABELS = [
@@ -150,6 +154,29 @@ export function LabelWorkspace() {
       </header>
 
       <section className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4">
+        {/* 定位质量提示：review 类是靠坐标吸附定位的，位置可能偏，需对照原卷 */}
+        <div className="flex flex-wrap items-center gap-2">
+          {current.quality === "good" ? (
+            <Badge variant="outline" className="border-[var(--success)] text-[var(--success)]">
+              文字定位 · 可信
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="border-[var(--warning)] text-[var(--warning)]">
+              坐标定位 · 位置可能偏
+            </Badge>
+          )}
+          {current.source_image_url ? (
+            <a
+              href={current.source_image_url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-muted-foreground underline-offset-2 hover:underline"
+            >
+              看原卷核对
+            </a>
+          ) : null}
+        </div>
+
         {/* 题块小图 */}
         <div className="flex items-center justify-center overflow-hidden rounded-md border border-border bg-secondary/40 p-2">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -171,6 +198,13 @@ export function LabelWorkspace() {
 
         {current.question_text ? (
           <p className="text-xs leading-relaxed text-muted-foreground">题干：{current.question_text}</p>
+        ) : null}
+
+        {/* OCR 识别到的文字，用来快速判断这张图是否裁对了位置 */}
+        {current.matched_text ? (
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            图中 OCR：<span className="font-mono opacity-80">{current.matched_text.slice(0, 120)}</span>
+          </p>
         ) : null}
 
         {/* 学生作答内容（可选补录） */}

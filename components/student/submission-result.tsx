@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { Sparkles, Clock, CheckCircle2, Target, Trophy, MessageCircle, FileText, ImageIcon } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -112,6 +112,16 @@ function GradedView({ submission, task }: { submission: Submission; task: Task }
   const scoreBreakdown = buildScoreBreakdown(submission.ai_issues)
   /** 与图片 bbox 共享的高亮状态：null 表示无悬停 */
   const [activeBoxId, setActiveBoxId] = useState<string | null>(null)
+  /** 答卷卡片锚点：评分溯源点击后滚动跳转到批注位置 */
+  const answerCardRef = useRef<HTMLDivElement | null>(null)
+
+  /** 评分溯源点击选中：高亮对应批注并滚动到答卷区 */
+  function handleTraceSelect(id: string | null) {
+    setActiveBoxId(id)
+    if (id) {
+      answerCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+    }
+  }
 
   return (
     <>
@@ -167,12 +177,13 @@ function GradedView({ submission, task }: { submission: Submission; task: Task }
         </div>
       </Card>
 
-      {/* 评分溯源：满分→逐条扣分→最终分，hover 联动图片批注 */}
+      {/* 评分溯源：满分→逐条扣分→最终分，点击条目选中并跳转到答卷批注 */}
       {scoreBreakdown && (
         <ScoreProvenance
           breakdown={scoreBreakdown}
           activeId={activeBoxId}
-          onHoverChange={setActiveBoxId}
+          onHoverChange={handleTraceSelect}
+          trigger="click"
         />
       )}
 
@@ -210,7 +221,7 @@ function GradedView({ submission, task }: { submission: Submission; task: Task }
       )}
 
       {/* Answer images + transcript tabs + linked annotation list */}
-      <Card className="p-5 space-y-4">
+      <Card ref={answerCardRef} className="p-5 space-y-4 scroll-mt-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-[color:var(--success)]" />

@@ -84,7 +84,7 @@ export function ClassAIDiagnostic({ taskId, fallback }: Props) {
             <div className="flex items-center gap-2">
               <h2 className="text-base font-semibold">AI 班级学情诊断</h2>
               <Badge variant="outline" className="text-[10px] bg-background/60 font-normal">
-                Claude Opus 4.6
+                AI 实时生成
               </Badge>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">

@@ -20,10 +20,13 @@ export function ScoreProvenance({
   breakdown,
   activeId,
   onHoverChange,
+  trigger = "hover",
 }: {
   breakdown: ScoreBreakdown
   activeId?: string | null
   onHoverChange?: (id: string | null) => void
+  /** 联动触发方式：hover（教师端默认）或 click（学生端，点击才跳转/再点取消） */
+  trigger?: "hover" | "click"
 }) {
   const deductions = breakdown.items.filter((it) => it.delta < 0)
   const bonuses = breakdown.items.filter((it) => it.delta > 0)
@@ -49,6 +52,7 @@ export function ScoreProvenance({
           showResidual={showResidual}
           activeId={activeId}
           onHoverChange={onHoverChange}
+          trigger={trigger}
         />
       ) : (
         <div className="flex items-start gap-2 rounded-md bg-muted/40 border border-border px-3 py-2">
@@ -75,6 +79,7 @@ function ScoreLedger({
   showResidual,
   activeId,
   onHoverChange,
+  trigger = "hover",
 }: {
   breakdown: ScoreBreakdown
   deductions: ScoreDeductionItem[]
@@ -82,6 +87,7 @@ function ScoreLedger({
   showResidual: boolean
   activeId?: string | null
   onHoverChange?: (id: string | null) => void
+  trigger?: "hover" | "click"
 }) {
   return (
     <div className="space-y-1">
@@ -93,12 +99,24 @@ function ScoreLedger({
 
       {/* 逐条扣分 */}
       {deductions.map((item) => (
-        <LedgerRow key={item.id} item={item} activeId={activeId} onHoverChange={onHoverChange} />
+        <LedgerRow
+          key={item.id}
+          item={item}
+          activeId={activeId}
+          onHoverChange={onHoverChange}
+          trigger={trigger}
+        />
       ))}
 
       {/* 亮点加分 */}
       {bonuses.map((item) => (
-        <LedgerRow key={item.id} item={item} activeId={activeId} onHoverChange={onHoverChange} />
+        <LedgerRow
+          key={item.id}
+          item={item}
+          activeId={activeId}
+          onHoverChange={onHoverChange}
+          trigger={trigger}
+        />
       ))}
 
       {/* 综合评定调整（诚实对账） */}
@@ -138,22 +156,41 @@ function LedgerRow({
   item,
   activeId,
   onHoverChange,
+  trigger = "hover",
 }: {
   item: ScoreDeductionItem
   activeId?: string | null
   onHoverChange?: (id: string | null) => void
+  trigger?: "hover" | "click"
 }) {
   const isActive = activeId === item.id
   const tone = toneOf(item.type)
   const interactive = !!onHoverChange
+  const isClick = trigger === "click"
+
+  // click 模式：点击选中并联动跳转，再点同一条取消；hover 模式保持原行为
+  const clickHandlers = isClick
+    ? {
+        onClick: () => onHoverChange?.(isActive ? null : item.id),
+        onKeyDown: (e: React.KeyboardEvent) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault()
+            onHoverChange?.(isActive ? null : item.id)
+          }
+        },
+        role: "button" as const,
+      }
+    : {
+        onMouseEnter: () => onHoverChange?.(item.id),
+        onMouseLeave: () => onHoverChange?.(null),
+        onFocus: () => onHoverChange?.(item.id),
+        onBlur: () => onHoverChange?.(null),
+      }
 
   return (
     <div
-      onMouseEnter={interactive ? () => onHoverChange?.(item.id) : undefined}
-      onMouseLeave={interactive ? () => onHoverChange?.(null) : undefined}
+      {...(interactive ? clickHandlers : {})}
       tabIndex={interactive ? 0 : undefined}
-      onFocus={interactive ? () => onHoverChange?.(item.id) : undefined}
-      onBlur={interactive ? () => onHoverChange?.(null) : undefined}
       className={cn(
         "flex items-center gap-2 px-2 py-1.5 rounded-md transition-colors",
         interactive && "cursor-pointer",

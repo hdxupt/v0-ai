@@ -1,10 +1,158 @@
-import { streamText, convertToModelMessages, type UIMessage } from "ai"
+import { streamText, convertToModelMessages, tool, stepCountIs, type UIMessage } from "ai"
+import { z } from "zod"
 import { getCurrentTeacher } from "@/lib/auth-server"
 import { createClient } from "@/lib/supabase/client"
 import { resolveModel } from "@/lib/ai/gateway"
 import { AI_MODELS } from "@/lib/ai/config"
+import { normalizeWeakPoints } from "@/lib/types"
 
-export const maxDuration = 30
+export const maxDuration = 60
+
+/* ----------------------------- agent 数据工具 ----------------------------- */
+
+/**
+ * 教研助手的实时数据查询工具集（全部限定在教师本班范围内）。
+ * 有了这些工具，助手不再受限于系统提示里的聚合快照，
+ * 可以按需下钻到「每个学生的每次作业分数、薄弱点、评语」粒度。
+ */
+function buildTeacherTools(classId: string) {
+  const sb = createClient()
+
+  return {
+    getScoreMatrix: tool({
+      description:
+        "获取本班学生 × 最近作业的完整分数矩阵，含每位学生的每次作业得分、平均分、未交记录。回答'哪些学生需要关注/进步最大/成绩波动'等问题时必须先调用此工具。",
+      inputSchema: z.object({
+        taskLimit: z.number().min(1).max(12).describe("统计最近几次作业，默认 8"),
+      }),
+      execute: async ({ taskLimit }) => {
+        const [{ data: students }, { data: tasks }] = await Promise.all([
+          sb.from("app_users").select("id, name, student_no").eq("role", "student").eq("class_id", classId),
+          sb
+            .from("tasks")
+            .select("id, title, subject, created_at")
+            .contains("class_ids", [classId])
+            .order("created_at", { ascending: false })
+            .limit(taskLimit ?? 8),
+        ])
+        const taskIds = (tasks ?? []).map((t: any) => t.id)
+        const { data: subs } = taskIds.length
+          ? await sb
+              .from("submissions")
+              .select("task_id, student_id, status, score")
+              .eq("class_id", classId)
+              .in("task_id", taskIds)
+          : { data: [] as any[] }
+
+        const rows = (students ?? []).map((stu: any) => {
+          const cells = (tasks ?? []).map((t: any) => {
+            const sub = (subs ?? []).find((s: any) => s.task_id === t.id && s.student_id === stu.id)
+            if (!sub) return { task: t.title, status: "未交", score: null }
+            if (sub.status !== "graded") return { task: t.title, status: "待批", score: null }
+            return { task: t.title, status: "已批", score: sub.score }
+          })
+          const scores = cells.filter((c) => typeof c.score === "number").map((c) => c.score as number)
+          return {
+            name: stu.name,
+            student_no: stu.student_no,
+            scores: cells,
+            average: scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null,
+            missing_count: cells.filter((c) => c.status === "未交").length,
+          }
+        })
+        return { tasks: (tasks ?? []).map((t: any) => ({ title: t.title, subject: t.subject })), students: rows }
+      },
+    }),
+
+    getStudentDetail: tool({
+      description:
+        "按姓名查询单个学生的完整学情：历次作业分数、薄弱知识点、最近一次 AI 评语。回答关于具体某个学生的问题时调用。",
+      inputSchema: z.object({
+        studentName: z.string().describe("学生姓名，如'李思琪'"),
+      }),
+      execute: async ({ studentName }) => {
+        const { data: stu } = await sb
+          .from("app_users")
+          .select("id, name, student_no")
+          .eq("role", "student")
+          .eq("class_id", classId)
+          .eq("name", studentName)
+          .maybeSingle()
+        if (!stu) return { error: `本班没有找到学生「${studentName}」` }
+
+        const { data: subs } = await sb
+          .from("submissions")
+          .select("task_title, status, score, weak_points, ai_comment, submitted_at")
+          .eq("student_id", stu.id)
+          .order("submitted_at", { ascending: false })
+          .limit(10)
+
+        const weakAll = new Map<string, number>()
+        for (const s of subs ?? []) {
+          for (const w of normalizeWeakPoints(s.weak_points as any)) {
+            weakAll.set(w, (weakAll.get(w) ?? 0) + 1)
+          }
+        }
+        return {
+          name: stu.name,
+          student_no: stu.student_no,
+          history: (subs ?? []).map((s: any) => ({
+            task: s.task_title,
+            status: s.status,
+            score: s.score,
+            weak_points: normalizeWeakPoints(s.weak_points),
+          })),
+          recurring_weak_points: Array.from(weakAll.entries())
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .map(([k, c]) => `${k}（${c}次）`),
+          latest_ai_comment: (subs ?? []).find((s: any) => s.ai_comment)?.ai_comment ?? null,
+        }
+      },
+    }),
+
+    getWeakPointStudents: tool({
+      description:
+        "查询在某个知识点上出错的学生名单及其出错次数。回答'哪些学生在XX知识点薄弱/需要针对XX补差'时调用。",
+      inputSchema: z.object({
+        keyword: z.string().describe("知识点关键词，如'三角函数'，支持模糊匹配"),
+      }),
+      execute: async ({ keyword }) => {
+        const { data: subs } = await sb
+          .from("submissions")
+          .select("student_name, task_title, weak_points, score")
+          .eq("class_id", classId)
+          .eq("status", "graded")
+          .order("submitted_at", { ascending: false })
+          .limit(100)
+
+        const hits = new Map<string, { count: number; tasks: Set<string>; scores: number[] }>()
+        for (const s of subs ?? []) {
+          const matched = normalizeWeakPoints(s.weak_points as any).filter((w) => w.includes(keyword))
+          if (matched.length === 0) continue
+          const cur = hits.get(s.student_name) ?? { count: 0, tasks: new Set<string>(), scores: [] }
+          cur.count += matched.length
+          cur.tasks.add(s.task_title)
+          if (typeof s.score === "number") cur.scores.push(s.score)
+          hits.set(s.student_name, cur)
+        }
+        return {
+          keyword,
+          students: Array.from(hits.entries())
+            .sort((a, b) => b[1].count - a[1].count)
+            .map(([name, v]) => ({
+              name,
+              error_count: v.count,
+              related_tasks: Array.from(v.tasks),
+              avg_score: v.scores.length
+                ? Math.round(v.scores.reduce((a, b) => a + b, 0) / v.scores.length)
+                : null,
+            })),
+        }
+      },
+    }),
+  }
+}
 
 /**
  * 构造"全班级最近 8 个作业"汇总学情快照（默认场景）。
@@ -201,16 +349,21 @@ export async function POST(req: Request) {
     : "当前对话的分析范围是教师班级最近 8 次作业的聚合数据。"
 
   const system = `你是希沃 AI 教研助手，专为中学教师服务。你的核心能力：
-1. 基于真实班级学情数据回答问题（数据见下方快照）
+1. 基于真实班级学情数据回答问题（概览见下方快照；细粒度数据用工具查询）
 2. 帮助教师快速定位需要关注的学生与薄弱知识点
 3. 提供有针对性的教学建议、出题建议、复习重点
 4. 生成班级周报、学情简报
 
+你拥有三个实时数据查询工具，回答涉及具体学生/分数/知识点的问题前必须先调用工具拿到真实数据：
+- getScoreMatrix：全班学生 × 近几次作业的分数矩阵（谁需要关注、谁在进步、谁常缺交）
+- getStudentDetail：单个学生的历次分数、反复出现的薄弱点、最近评语
+- getWeakPointStudents：某知识点上出错的学生名单
+
 回答原则：
 - 用简洁、专业的中文回答，避免冗长开场
-- 引用快照中的真实数据时，使用 markdown 列表或表格
+- 引用真实数据时，使用 markdown 列表或表格
 - 给出具体可执行的行动建议，不空谈
-- 当数据不足时直接说"当前数据暂不足以判断"，不要编造
+- 先查工具再回答；只有工具也查不到时才说"当前数据暂不足以判断"，不要编造
 
 ${scopeHint}
 
@@ -223,6 +376,8 @@ ${snapshot}
     model: resolveModel(AI_MODELS.chat),
     system,
     messages: await convertToModelMessages(messages),
+    tools: user.class_id ? buildTeacherTools(user.class_id) : undefined,
+    stopWhen: stepCountIs(6),
   })
   return result.toUIMessageStreamResponse()
 }

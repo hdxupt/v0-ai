@@ -121,11 +121,17 @@ export function GradingControlPanel({
   const [phase, setPhase] = useState<Phase>(initiallyGraded || v2 ? "done" : "idle")
   const [score, setScore] = useState<number>(submission.score ?? 0)
   const [aiComment] = useState(submission.ai_comment ?? "")
+  // 用 || 而不是 ??：AI 批改会把 teacher_comment 写成空字符串 ""，
+  // ?? 不会对 "" 回退，导致刷新后评语框永远为空（评语不显示 bug 的根因）
   const [teacherComment, setTeacherComment] = useState(
-    submission.teacher_comment ?? submission.ai_comment ?? "",
+    submission.teacher_comment || submission.ai_comment || "",
   )
   const [saving, setSaving] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  // 独立评语生成/改写
+  const [commentLoading, setCommentLoading] = useState(false)
+  const [reviseOpen, setReviseOpen] = useState(false)
+  const [reviseInstruction, setReviseInstruction] = useState("")
 
   const submittedAtLabel = useMemo(
     () =>
@@ -201,6 +207,40 @@ export function GradingControlPanel({
       setPhase("error")
       setErrorMsg(e?.message ?? "AI 批阅失败")
       toast.error("AI 批阅失败", { description: e?.message })
+    }
+  }
+
+  /** 独立生成/改写评语：revise=true 时携带教师修改建议 */
+  async function handleGenerateComment(revise = false) {
+    if (revise && !reviseInstruction.trim()) {
+      toast.error("请先填写修改建议")
+      return
+    }
+    setCommentLoading(true)
+    try {
+      const res = await fetch(`/api/submissions/${submission.id}/comment`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          revise
+            ? { instruction: reviseInstruction.trim(), current: teacherComment }
+            : {},
+        ),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error ?? "评语生成失败")
+      setTeacherComment(data.comment)
+      if (revise) {
+        setReviseInstruction("")
+        setReviseOpen(false)
+        toast.success("已按你的建议调整评语")
+      } else {
+        toast.success("AI 评语已生成", { description: "可继续编辑或提出修改建议" })
+      }
+    } catch (e: any) {
+      toast.error("评语生成失败", { description: e?.message })
+    } finally {
+      setCommentLoading(false)
     }
   }
 
@@ -517,18 +557,64 @@ export function GradingControlPanel({
               <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 AI 个性化评语
               </span>
-              <Badge variant="outline" className="text-[10px] font-normal gap-1 bg-accent/30 border-accent">
-                <Sparkles className="w-2.5 h-2.5" />
-                AI 生成
-              </Badge>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 gap-1.5 text-xs bg-transparent"
+                disabled={commentLoading}
+                onClick={() => handleGenerateComment(false)}
+              >
+                <Sparkles className={cn("w-3 h-3", commentLoading && "animate-pulse")} />
+                {commentLoading ? "生成中..." : teacherComment ? "重新生成" : "AI 生成评语"}
+              </Button>
             </div>
             <Textarea
               value={teacherComment}
               onChange={(e) => setTeacherComment(e.target.value)}
               rows={6}
               className="resize-none text-sm leading-relaxed"
-              placeholder="请审阅并修改 AI 生成的评语..."
+              placeholder="点击右上角「AI 生成评语」，或直接手写..."
             />
+            {/* 评语修改建议：老师给方向，AI 调整 */}
+            {reviseOpen ? (
+              <div className="space-y-2 rounded-md border border-border bg-muted/40 p-2.5">
+                <Textarea
+                  value={reviseInstruction}
+                  onChange={(e) => setReviseInstruction(e.target.value)}
+                  rows={2}
+                  className="resize-none text-sm bg-card"
+                  placeholder="例如：语气再温和些 / 多肯定他的解题步骤 / 压缩到 100 字以内"
+                />
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    className="h-7 flex-1 text-xs bg-primary hover:bg-primary/90"
+                    disabled={commentLoading || !reviseInstruction.trim()}
+                    onClick={() => handleGenerateComment(true)}
+                  >
+                    {commentLoading ? "调整中..." : "按建议调整评语"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 text-xs"
+                    disabled={commentLoading}
+                    onClick={() => setReviseOpen(false)}
+                  >
+                    取消
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="text-[11px] text-primary hover:underline disabled:opacity-50"
+                disabled={!teacherComment || commentLoading}
+                onClick={() => setReviseOpen(true)}
+              >
+                对评语不满意？给 AI 提修改建议
+              </button>
+            )}
             <p className="text-[11px] text-muted-foreground leading-relaxed">
               提示：此评语将随作业结果一同发送至{student.name}的学生端。
             </p>

@@ -254,7 +254,7 @@ export default async function ReportPage({
 
         <div className="xl:col-span-3 space-y-6 min-w-0">
           <StudentStatusPanel students={panelStudents} />
-          <TeachingSuggestions />
+          <TeachingSuggestions taskId={id} />
         </div>
       </div>
     </div>

@@ -143,13 +143,23 @@ export function LabelWorkspace() {
               {l.value} {stats[l.value] ?? 0}
             </Badge>
           ))}
-          <a
-            href="/api/label/export"
-            className="ml-auto inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 font-sans text-xs hover:bg-secondary"
-          >
-            <Download className="size-3.5" aria-hidden />
-            导出 JSONL
-          </a>
+          {/* 训练集 / 测试集 / 图片清单三件套，AutoDL 上训练需要全部下载 */}
+          <div className="ml-auto flex items-center gap-1.5">
+            {[
+              { href: "/api/label/export", text: "train.jsonl" },
+              { href: "/api/label/export?mode=test", text: "test.jsonl" },
+              { href: "/api/label/export?mode=urls", text: "images.txt" },
+            ].map((it) => (
+              <a
+                key={it.href}
+                href={it.href}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 font-sans text-xs hover:bg-secondary"
+              >
+                <Download className="size-3.5" aria-hidden />
+                {it.text}
+              </a>
+            ))}
+          </div>
         </div>
       </header>
 

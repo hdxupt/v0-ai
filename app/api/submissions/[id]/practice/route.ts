@@ -4,8 +4,8 @@ import { getSubmission, getTask, updateSubmissionPractice } from "@/lib/db"
 import { generatePracticeSet } from "@/lib/ai/practice"
 import { isAIGradingV2 } from "@/lib/types"
 
-/** AI 变式题生成耗时上限 */
-export const maxDuration = 90
+/** AI 变式题生成耗时上限（qwen-plus 实测 40~60s，留足余量） */
+export const maxDuration = 120
 
 /**
  * POST /api/submissions/[id]/practice

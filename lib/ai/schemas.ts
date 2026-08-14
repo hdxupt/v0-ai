@@ -139,7 +139,7 @@ export const GradingResultSchema = z.object({
         "(1) 开头用 [姓名]同学，… 一句温暖肯定； " +
         "(2) 用'但目前存在 N 个核心问题需要重点突破：'起头，然后用'第一，xxx。…'、'第二，xxx。…'、'第三，xxx。…'分别列出 2~3 条核心问题（每条先一句短标题再展开）； " +
         "(3) 用'建议接下来这样做：'起头给出 1~3 条可执行行动； " +
-        "(4) 用'相信下次作业一定会有明显进步！'之类的一句鼓励收���。" +
+        "(4) 用'相信下次作业一定会有明显进步！'之类的一句鼓励收����。" +
         "禁止省略'第一/第二/第三'这类序号词，禁止用'第1题/第2题'代替（题号请放进具体描述里）。",
     ),
   radar_analysis: z.preprocess(parseMaybeJsonString, RadarAnalysisSchema),
@@ -169,13 +169,39 @@ export const PracticeQuestionSchema = z.object({
 })
 export type PracticeQuestion = z.infer<typeof PracticeQuestionSchema>
 
-export const PracticeSetResultSchema = z.object({
-  basis: z.string().min(2).max(60).describe("本组练习针对的薄弱点���要，用于标题展示"),
-  questions: z.preprocess(
-    parseMaybeJsonString,
-    z.array(PracticeQuestionSchema).min(1).max(5).describe("2~3 道变式题最佳"),
-  ),
-})
+export const PracticeSetResultSchema = z.preprocess(
+  // Qwen json_object 模式看不到 schema，易漏 knowledge、写超长 basis/explanation。
+  // 归一化兜底：截断超长字段、为缺失 knowledge 补默认值。
+  // 注意 generateObject 绕过 preprocess，此兜底靠 practice.ts catch 里的 safeParse 生效。
+  (val) => {
+    if (!val || typeof val !== "object" || Array.isArray(val)) return val
+    const o = val as Record<string, unknown>
+    const clamp = (s: unknown, max: number) =>
+      typeof s === "string" && s.length > max ? s.slice(0, max) : s
+    const rawQuestions = parseMaybeJsonString(o.questions)
+    const questions = Array.isArray(rawQuestions)
+      ? rawQuestions.map((q) => {
+          if (!q || typeof q !== "object") return q
+          const qq = q as Record<string, unknown>
+          return {
+            ...qq,
+            knowledge: clamp(qq.knowledge ?? qq.knowledge_point ?? qq.topic ?? "综合薄弱点巩固", 40),
+            stem: clamp(qq.stem, 400),
+            answer: clamp(qq.answer, 300),
+            explanation: clamp(qq.explanation, 500),
+          }
+        })
+      : rawQuestions
+    return { ...o, basis: clamp(o.basis, 60), questions }
+  },
+  z.object({
+    basis: z.string().min(2).max(60).describe("本组练习针对的薄弱点摘要，用于标题展示"),
+    questions: z.preprocess(
+      parseMaybeJsonString,
+      z.array(PracticeQuestionSchema).min(1).max(5).describe("2~3 道变式题最佳"),
+    ),
+  }),
+)
 export type PracticeSetResult = z.infer<typeof PracticeSetResultSchema>
 
 /* ============================== 班级学情报告 ============================== */

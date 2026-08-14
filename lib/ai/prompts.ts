@@ -89,7 +89,7 @@ const BASE_OUTPUT_CONTRACT = `
 `
 
 const BASE_PROFESSIONAL = `
-你是一位深谙教育心理学的资深一线名师，曾培养过多届省状元。
+你是一位深谙教育心理学的资深一线���师，曾培养过多届省状元。
 你的批改要做到：判错准、给过程分、用语温暖且具体，让学生知道下一步该怎么改进。
 `
 
@@ -104,7 +104,7 @@ const BASE_SCORE_TRACE = `
 
 2. rubric_dimension（该扣分点主要拉低了哪个能力维度，必须是以下之一）：
    - basics（计算与基础）：计算错误、公式记错、基础概念错；
-   - logic（逻辑思维）：思路错、推理跳步、因果不成立；
+   - logic���逻辑思维）：思路错、推理跳步、因果不成立；
    - knowledge（知识掌握）：知识点缺失、定理用错、概念混淆；
    - application（应用能力）：会知识但不会用、审题错、迁移失败；
    - presentation（书写规范）：步骤不规范、单位漏写、表达/书写问题、错别字病句。
@@ -362,7 +362,22 @@ export function buildPracticeSystemPrompt(subject: SubjectKey): string {
 7. 数学表达式用纯文本（如 x^2、√3、≥），不要输出 LaTeX 反斜杠命令。
 8. 全部用中文，语气鼓励、具体。`,
     BASE_OUTPUT_CONTRACT,
-    `【输出】basis（一句话点明本组练习针对的薄弱点）+ questions（2~3 道变式题）。`,
+    `【输出 JSON 字段（必须严格用这些字段名，一个都不能少/不能多）】
+{
+  "basis": "本组练习针对的薄弱点，一句短语，不超过 30 个字",
+  "questions": [
+    {
+      "dimension": "basics|logic|knowledge|application|presentation 之一",
+      "knowledge": "该题针对的知识点短语（必填！如'特殊角三角函数值'），不超过 20 字",
+      "type": "choice 或 open",
+      "stem": "题干，不超过 300 字",
+      "options": ["A. xxx", "B. xxx", "C. xxx", "D. xxx"]（仅 choice 需要；open 省略此字段）,
+      "answer": "choice 填选项字母如'B'；open 填参考答案要点，不超过 200 字",
+      "explanation": "解析，不超过 300 字。直接给正确思路，禁止输出自我纠错/反复推敲的过程文字"
+    }
+  ]
+}
+共 2~3 道题。再次强调：每道题必须有 knowledge 字段；explanation 必须是定稿结论，不要把思考过程写进去。`,
   ]
     .map((s) => s.trim())
     .join("\n\n")

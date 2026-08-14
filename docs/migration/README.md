@@ -9,6 +9,8 @@
 docs/migration/
 ├── README.md          ← 本文件，迁移总清单
 ├── env-vars.md        ← 环境变量清单（只有名字，没有值）
+├── schema.sql         ← 数据库建表脚本（Supabase 彻底丢失时的最后保险）
+├── seed.sql           ← 班级 + 师生名单（建表后恢复，让系统可登录）
 ├── memories/          ← v0 记忆文件备份（换账号会丢，这里是副本）
 │   ├── MEMORY.md
 │   ├── sewise-project.md
@@ -55,8 +57,20 @@ docs/migration/
 按 [env-vars.md](./env-vars.md) 第一节填 4 个必需变量。
 
 ### 4. 数据库
-- **想保留现有数据**：Supabase URL + anon key 填**原项目**的值，数据完全不动，零迁移成本 ← 推荐
-- **新建 Supabase**：需重跑建表 SQL + 重新导入演示数据（工作量大，比赛期别这么干）
+
+**方案 A：复用原 Supabase（强烈推荐）**
+新账号的环境变量里填**原项目**的 Supabase URL + anon key，数据完全不动，零迁移成本。
+Supabase 项目本身不属于 v0 账号，换 v0 账号不影响它。
+
+**方案 B：原 Supabase 彻底不可用时才走这条**
+1. 新建 Supabase 项目
+2. SQL Editor 执行 [schema.sql](./schema.sql) → 建好 6 张表
+3. SQL Editor 执行 [seed.sql](./seed.sql) → 恢复 3 个班 + 14 名师生，此时已可登录
+4. 作业与批改数据（tasks / submissions）无法恢复 —— 需重新布置作业、重新上传批改。
+   注意旧图片 URL 指向旧 Blob store，即使导入旧数据也看不到图
+
+> 库被闲置冻结 ≠ 数据丢失。免费版闲置 7 天冻结，用 `supabase_restore_project`
+> 恢复即可（1~2 分钟），不要因为访问不了就重建。
 
 ### 5. 验证
 ```bash

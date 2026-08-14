@@ -79,19 +79,36 @@ export async function POST(_req: Request, ctx: { params: Promise<{ taskId: strin
   const subject = resolveSubject(task.subject)
 
   try {
-    const { object } = await generateObject({
-      model: resolveModel(AI_MODELS.classReport),
-      schema: ClassReportSchema,
-      system: buildClassReportSystemPrompt(),
-      prompt: buildClassReportUserPrompt({
-        taskTitle: task.title,
-        subject,
-        totalScore: 100,
-        className,
-        graded: gradedSummary,
-      }),
-      maxRetries: 1,
-    })
+    let object: unknown
+    try {
+      const result = await generateObject({
+        model: resolveModel(AI_MODELS.classReport),
+        schema: ClassReportSchema,
+        system: buildClassReportSystemPrompt(),
+        prompt: buildClassReportUserPrompt({
+          taskTitle: task.title,
+          subject,
+          totalScore: 100,
+          className,
+          graded: gradedSummary,
+        }),
+        maxRetries: 1,
+      })
+      object = result.object
+    } catch (e: any) {
+      // generateObject 不跑 schema 的 z.preprocess（直接调底层 validate）。
+      // Qwen 偶发输出 "90-100" 等区间键名，这里从 e.cause.value 拿原始对象，
+      // 用 schema.parse() 走 preprocess 键名归一化恢复（与 grade.ts 同款兜底）。
+      const rawValue = e?.cause?.value ?? e?.value ?? null
+      const looksLikeValidationError =
+        e?.name === "AI_TypeValidationError" ||
+        e?.cause?.name === "ZodError" ||
+        (e?.message ?? "").includes("response did not match schema")
+      if (!looksLikeValidationError || rawValue == null) throw e
+      const parsed = ClassReportSchema.safeParse(rawValue)
+      if (!parsed.success) throw e
+      object = parsed.data
+    }
 
     return NextResponse.json({
       report: object,

@@ -72,7 +72,7 @@ const BASE_GROUNDING = `
 
 const BASE_OUTPUT_CONTRACT = `
 【输出格式契约】
-1. 你必须严格输出符合 schema 的结构化数据。
+1. 你必须严格输出符合 schema 的结构化 JSON 数据（DashScope 的 JSON 模式要求提示词中显式出现"JSON"字样，勿删）。
 2. 文本字段内部禁止换行符（如需分段，用空格代替）。
 3. 评语必须具体到题目 / 步骤 / 词句，禁止"继续努力、加油"等空话。
 4. score 与 total_score 必须是整数，且 0 ≤ score ≤ total_score。
@@ -283,7 +283,11 @@ export function buildClassReportSystemPrompt(): string {
     BASE_OUTPUT_CONTRACT,
     `【报告必须包含】
 1. summary：一段 2~3 句的整体诊断（提及班级平均分、最薄弱知识点）。
-2. score_distribution：按 [90,100]/[75,90)/[60,75)/[0,60) 四档统计人数。
+2. score_distribution：四档人数统计，必须且只能用这四个字段名：
+     - excellent = [90,100] 人数
+     - good = [75,90) 人数
+     - pass = [60,75) 人数
+     - fail = [0,60) 人数
 3. top_weak_points：班级共性薄弱知识点 Top 3，每项给：
      - name 知识点名
      - student_count 涉及学生数

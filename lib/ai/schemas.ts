@@ -139,7 +139,7 @@ export const GradingResultSchema = z.object({
         "(1) 开头用 [姓名]同学，… 一句温暖肯定； " +
         "(2) 用'但目前存在 N 个核心问题需要重点突破：'起头，然后用'第一，xxx。…'、'第二，xxx。…'、'第三，xxx。…'分别列出 2~3 条核心问题（每条先一句短标题再展开）； " +
         "(3) 用'建议接下来这样做：'起头给出 1~3 条可执行行动； " +
-        "(4) 用'相信下次作业一定会有明显进步！'之类的一句鼓励收尾。" +
+        "(4) 用'相信下次作业一定会有明显进步！'之类的一句鼓励收���。" +
         "禁止省略'第一/第二/第三'这类序号词，禁止用'第1题/第2题'代替（题号请放进具体描述里）。",
     ),
   radar_analysis: z.preprocess(parseMaybeJsonString, RadarAnalysisSchema),
@@ -180,12 +180,27 @@ export type PracticeSetResult = z.infer<typeof PracticeSetResultSchema>
 
 /* ============================== 班级学情报告 ============================== */
 
-export const ScoreDistributionSchema = z.object({
-  excellent: z.number().int().min(0).describe("90~100 分人数"),
-  good: z.number().int().min(0).describe("75~89 分人数"),
-  pass: z.number().int().min(0).describe("60~74 分人数"),
-  fail: z.number().int().min(0).describe("0~59 分人数"),
-})
+export const ScoreDistributionSchema = z.preprocess(
+  // Qwen（json_object 模式看不到 schema）时常输出区间键 "90-100" 等，做键名归一化兜底
+  (val) => {
+    if (val && typeof val === "object" && !Array.isArray(val)) {
+      const o = val as Record<string, unknown>
+      return {
+        excellent: o.excellent ?? o["90-100"] ?? o["90~100"] ?? 0,
+        good: o.good ?? o["75-89"] ?? o["75-90"] ?? o["75~89"] ?? 0,
+        pass: o.pass ?? o["60-74"] ?? o["60-75"] ?? o["60~74"] ?? 0,
+        fail: o.fail ?? o["0-59"] ?? o["0-60"] ?? o["0~59"] ?? 0,
+      }
+    }
+    return val
+  },
+  z.object({
+    excellent: z.number().int().min(0).describe("90~100 分人数"),
+    good: z.number().int().min(0).describe("75~89 分人数"),
+    pass: z.number().int().min(0).describe("60~74 分人数"),
+    fail: z.number().int().min(0).describe("0~59 分人数"),
+  }),
+)
 
 export const TopWeakPointSchema = z.object({
   name: z.string().min(2).max(30),

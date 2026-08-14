@@ -137,16 +137,53 @@ create table if not exists public.activities (
 );
 create index if not exists activities_class_created_idx on public.activities (class_id, created_at desc);
 
+-- ---------------------------------------------------------------------------
+-- 7. label_samples 评分溯源标注集
+--    批改时把每道错题从原图裁出来（crop_url + bounding_box），
+--    用于「AI 说错在哪，就把那一处圈出来给你看」的溯源展示与准确率标注。
+--    应用代码不直接读写此表，由标注脚本 / service role 写入。
+-- ---------------------------------------------------------------------------
+create table if not exists public.label_samples (
+  id               bigserial primary key,
+  submission_id    uuid not null references public.submissions(id) on delete cascade,
+  detail_index     integer not null,          -- 对应 submissions.ai_issues 里的第几条
+  page_index       integer not null default 0,-- 多页作业的页码
+  crop_url         text not null,             -- 裁剪图 Blob URL
+  source_image_url text not null,             -- 原图 URL
+  bounding_box     jsonb not null,            -- 裁剪框 {x,y,w,h}
+  question_text    text,
+  correct_answer   text not null,
+  student_answer   text,
+  ai_type          text,                      -- AI 判定的错误类型
+  ai_analysis      text,
+  label            text,                      -- 人工标注结论（准确率统计用）
+  labeled_at       timestamptz,
+  quality          text,
+  locate_method    text,                      -- 定位方式（OCR 匹配 / 视觉等）
+  locate_score     numeric,                   -- 定位置信度
+  matched_text     text,
+  line_count       integer,
+  created_at       timestamptz default now()
+);
+create index if not exists label_samples_submission_idx
+  on public.label_samples (submission_id, detail_index);
+
 -- =============================================================================
--- RLS 说明
+-- RLS 说明（与线上实际状态一致，2026-08-15 核对）
 --
--- 本项目当前【未启用 RLS】：应用层用自建 cookie 会话（lib/auth-server.ts），
+-- 6 张业务表（classes / app_users / tasks / submissions / notifications /
+-- activities）RLS 全部【关闭】：应用用自建 cookie 会话（lib/auth-server.ts），
 -- 服务端一律用 SERVICE_ROLE_KEY 访问，权限在 API 路由里校验。
+--
+-- label_samples 的 RLS 是【开启且零策略】，等价于只有 service role 能访问，
+-- 匿名 key 一行都读不到。重建时要保持这个状态：
+alter table public.label_samples enable row level security;
+--
 -- 这是演示/比赛项目的取舍。若要转为生产，必须：
 --   1. 迁到 Supabase Auth，让 auth.uid() 可用
---   2. 对 6 张表逐一 enable row level security 并编写 policy
+--   2. 对业务表逐一 enable row level security 并编写 policy
 --   3. 前端停止使用 service role key
--- 在当前架构下贸然开启 RLS 会导致所有查询返回空，功能全挂。
+-- 在当前架构下贸然给 6 张业务表开 RLS 会导致所有查询返回空，功能全挂。
 -- =============================================================================
 
 -- =============================================================================
@@ -156,6 +193,10 @@ create index if not exists activities_class_created_idx on public.activities (cl
 --   1. classes：3 个班
 --   2. app_users：1 名教师（t1）+ 13 名学生（s01~s13），注意 password 字段
 --   3. tasks / submissions：演示用作业与批改结果
+--   4. label_samples：溯源标注集（可留空，不影响演示主流程）
+--
+-- 注意：旧的图片 URL 指向旧 Blob store，换了 BLOB_READ_WRITE_TOKEN 后
+-- 即使导入旧 submissions 数据也看不到作业图，需重新上传。
 --
 -- 迁移时的推荐做法：不要重建，而是直接复用原 Supabase 项目
 -- （在新账号里填入原项目的 URL + key 即可，数据零丢失）。

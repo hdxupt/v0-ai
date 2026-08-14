@@ -3,11 +3,17 @@
 > 目的：换 v0 账号 / 换设备 / 防记忆丢失时，靠这个目录就能完整恢复上下文。
 > 生成时间：2026-08-15
 
+## 👉 第一次操作请直接看 [HOWTO.md](./HOWTO.md)
+
+那份是手把手的（点哪个按钮、命令在哪运行、每步怎么验证）。
+本文件是速查清单，适合已经熟悉流程后回来对照。
+
 ## 目录内容
 
 ```
 docs/migration/
-├── README.md          ← 本文件，迁移总清单
+├── README.md          ← 本文件，迁移总清单（速查）
+├── HOWTO.md           ← 【手把手操作手册】不知道从哪下手就看这个
 ├── env-vars.md        ← 环境变量清单（只有名字，没有值）
 ├── schema.sql         ← 数据库建表脚本（Supabase 彻底丢失时的最后保险）
 ├── seed.sql           ← 班级 + 师生名单（建表后恢复，让系统可登录）
@@ -64,7 +70,7 @@ Supabase 项目本身不属于 v0 账号，换 v0 账号不影响它。
 
 **方案 B：原 Supabase 彻底不可用时才走这条**
 1. 新建 Supabase 项目
-2. SQL Editor 执行 [schema.sql](./schema.sql) → 建好 6 张表
+2. SQL Editor 执行 [schema.sql](./schema.sql) → 建好 7 张表
 3. SQL Editor 执行 [seed.sql](./seed.sql) → 恢复 3 个班 + 14 名师生，此时已可登录
 4. 作业与批改数据（tasks / submissions）无法恢复 —— 需重新布置作业、重新上传批改。
    注意旧图片 URL 指向旧 Blob store，即使导入旧数据也看不到图

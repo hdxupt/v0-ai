@@ -73,22 +73,9 @@ export async function generatePracticeSet(submission: Submission, task: Task): P
         e?.name === "AI_TypeValidationError" ||
         e?.cause?.name === "ZodError" ||
         (e?.message ?? "").includes("response did not match schema")
-      console.log(
-        "[v0] practice generateObject failed:",
-        JSON.stringify({
-          errName: e?.name,
-          causeName: e?.cause?.name,
-          msg: (e?.message ?? "").slice(0, 150),
-          hasRaw: rawValue != null,
-          rawPreview: rawValue ? JSON.stringify(rawValue).slice(0, 400) : null,
-        }),
-      )
       if (!looksLikeValidationError || rawValue == null) throw e
       const parsed = PracticeSetResultSchema.safeParse(rawValue)
-      if (!parsed.success) {
-        console.log("[v0] practice schema recovery failed:", JSON.stringify(parsed.error.issues.slice(0, 3)))
-        throw e
-      }
+      if (!parsed.success) throw e
       object = parsed.data
     }
 

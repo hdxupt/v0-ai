@@ -1,5 +1,6 @@
 import { createGateway } from "@ai-sdk/gateway"
 import { createAnthropic } from "@ai-sdk/anthropic"
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
 import type { LanguageModel } from "ai"
 
 /**
@@ -51,6 +52,27 @@ function getGatewayClient() {
   return _gateway
 }
 
+let _dashscope: ReturnType<typeof createOpenAICompatible> | null = null
+
+/**
+ * DashScope（阿里云百炼）OpenAI 兼容端点。
+ * 比赛主批改链路（grade-vlm.ts 的 qwen3-vl）已在用这个 key，付费可用、额度充足，
+ * 文本生成（评语/报告/讲评稿/教研助手）也走它，避开 AI Gateway 免费额度限流。
+ */
+function getDashScopeClient() {
+  if (_dashscope) return _dashscope
+  const apiKey = process.env.DASHSCOPE_API_KEY?.trim()
+  if (!apiKey) {
+    throw new Error("未配置 DASHSCOPE_API_KEY。请到项目 Vars 中添加阿里云百炼 API Key。")
+  }
+  _dashscope = createOpenAICompatible({
+    name: "dashscope",
+    baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    apiKey,
+  })
+  return _dashscope
+}
+
 function getAnthropicClient() {
   if (_anthropic) return _anthropic
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim()
@@ -99,6 +121,10 @@ export function getGateway() {
  * 这是项目里所有 streamText / generateObject 调用都应该走的入口。
  */
 export function resolveModel(modelId: string): LanguageModel {
+  // dashscope/qwen-plus 等 → 阿里云百炼直连（比赛付费 key，无限流之忧）
+  if (modelId.startsWith("dashscope/")) {
+    return getDashScopeClient()(modelId.replace(/^dashscope\//, ""))
+  }
   if (modelId.startsWith("anthropic/") && process.env.ANTHROPIC_API_KEY) {
     const directId = toAnthropicDirectModelId(modelId)
     return getAnthropicClient()(directId)

@@ -15,15 +15,16 @@ export const AI_MODELS = {
    * 可在 .env 设置 ANTHROPIC_API_KEY 并改用 createAnthropic 直连。
    */
   /**
-   * 注意：ANTHROPIC_API_KEY 对应的组织已被禁用（"This organization has been disabled"），
-   * 所有 anthropic/* 直连调用都会失败。主批改已走 Qwen VLM 链路（grade-vlm.ts），
-   * 这里的 grading 只是 legacy 兜底；文本生成类全部切到 AI Gateway 的 OpenAI 模型。
+   * 注意：ANTHROPIC_API_KEY 组织已被禁用，AI Gateway 免费额度也已限流。
+   * 主批改走 Qwen VLM（grade-vlm.ts，DashScope qwen3-vl）；
+   * 文本生成类全部走 dashscope/ 前缀 → 阿里云百炼直连（付费 key，稳定）。
+   * qwen-plus：结构化输出稳、支持 function calling、便宜（比赛全程用它）。
    */
-  grading: "openai/gpt-5-mini",
-  /** 班级学情报告/讲评稿/变式练习：走 Gateway，gpt-5-mini 结构化输出稳定 */
-  classReport: "openai/gpt-5-mini",
-  /** 教师 AI 助教：轻量问答，gpt-5-mini 即可 */
-  chat: "openai/gpt-5-mini",
+  grading: "dashscope/qwen-plus",
+  /** 班级学情报告/讲评稿/变式练习/评语 */
+  classReport: "dashscope/qwen-plus",
+  /** 教师 AI 教研助手：需要 function calling 查学情数据 */
+  chat: "dashscope/qwen-plus",
 } as const
 
 /** 批改并发上限（同一份作业批量批阅时） */

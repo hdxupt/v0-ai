@@ -33,7 +33,28 @@
 | `POSTGRES_*`（7 个） | Supabase 集成自动注入，**应用代码从未引用**。迁移时不用手动填 |
 | `SUPABASE_SERVICE_ROLE_KEY` / `SUPABASE_SECRET_KEY` / `SUPABASE_JWT_SECRET` 等 | 应用代码未引用（只用 anon key）。仅调试脚本偶尔用到 |
 
-## 四、如何安全备份变量值
+## 四、指纹校验表（迁移后核对用）
+
+迁移填完变量后，用下面的"指纹"核对是否填对、有没有漏字符或多空格。
+**只记前缀和长度，无法反推出密钥值**，可安全放在仓库里。
+
+| 变量名 | 前缀 | 总长度 | 校验状态（2026-08-15 实测） |
+|---|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | `https://ocaakbmzppifwmrcrdrp` | — | ✅ REST 接口 200 |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | `eyJhbG`（JWT 格式） | 208 | ✅ 鉴权通过 |
+| `DASHSCOPE_API_KEY` | `sk-` | 35 | ✅ qwen-plus 调用成功 |
+| `BLOB_READ_WRITE_TOKEN` | `vercel_blob_rw_` | 62 | ✅ 已配置 |
+| `TENCENT_SECRET_ID` | `AKID` | 36 | ✅ 已配置（可选） |
+
+**核对方法**（在新环境执行，不会打印完整值）：
+```bash
+node -e "const v=process.env.DASHSCOPE_API_KEY; console.log(v?.slice(0,3), v?.length)"
+# 期望输出：sk- 35
+```
+
+长度对不上，通常是复制时带了空格或换行 —— 重新粘贴一次。
+
+## 五、如何安全备份变量值
 
 **推荐做法：用 Vercel CLI 拉到本地（值不经过任何第三方）**
 
@@ -51,7 +72,7 @@ vercel env pull .env.backup.local            # 拉取所有变量到本地文件
 git status --short | grep -i env      # 应该没有任何输出
 ```
 
-## 五、新账号恢复步骤
+## 六、新账号恢复步骤
 
 1. 在新 v0 项目里连接 GitHub 仓库 `hdxupt/v0-ai`，切到工作分支
 2. 打开项目设置 → **Vars**，把第一节的 4 个必需变量逐个填入

@@ -36,7 +36,7 @@ docs/migration/
 
 ## 迁移前必做（3 件事）
 
-- [ ] **备份环境变量值** → 见 [env-vars.md](./env-vars.md) 第四节（`vercel env pull`）
+- [ ] **备份环境变量值** → 见 [env-vars.md](./env-vars.md) 第五节（`vercel env pull`）
 - [ ] **确认这个 migration 目录已 commit 并 push** 到 GitHub
 - [ ] 记下 Supabase 项目 ID，确认你有该 Supabase 账号的登录权限（不然数据拿不回来）
 

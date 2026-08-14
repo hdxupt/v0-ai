@@ -331,6 +331,24 @@ async function buildSingleTaskSnapshot(teacherClassId: string | null, taskId: st
 `
 }
 
+/**
+ * 解析教师的班级上下文。
+ * 教师的 user.class_id 恒为 null（教师带多个班，不挂在单个班上），
+ * 与看板一致：取班级列表第一个班作为当前上下文。
+ * 这曾是教研助手"数据不足"的根因——快照与工具都拿不到班级。
+ */
+async function resolveTeacherClassId(user: { class_id: string | null }): Promise<string | null> {
+  if (user.class_id) return user.class_id
+  const sb = createClient()
+  const { data } = await sb
+    .from("classes")
+    .select("id")
+    .order("display_order")
+    .limit(1)
+    .maybeSingle()
+  return data?.id ?? null
+}
+
 export async function POST(req: Request) {
   const user = await getCurrentTeacher()
   if (!user || user.role !== "teacher") {
@@ -340,9 +358,11 @@ export async function POST(req: Request) {
   const messages: UIMessage[] = body.messages ?? []
   const taskId: string | null = typeof body.taskId === "string" && body.taskId ? body.taskId : null
 
+  const classId = await resolveTeacherClassId(user)
+
   const snapshot = taskId
-    ? await buildSingleTaskSnapshot(user.class_id ?? null, taskId)
-    : await buildClassSnapshot(user.id, user.class_id ?? null)
+    ? await buildSingleTaskSnapshot(classId, taskId)
+    : await buildClassSnapshot(user.id, classId)
 
   const scopeHint = taskId
     ? "当前对话的分析范围已被锁定为某一次具体作业；当用户提到'本班/学情'时，请明确指代该作业，而不是历史汇总。"
@@ -363,7 +383,7 @@ export async function POST(req: Request) {
 - 用简洁、专业的中文回答，避免冗长开场
 - 引用真实数据时，使用 markdown 列表或表格
 - 给出具体可执行的行动建议，不空谈
-- 先查工具再回答；只有工具也查不到时才说"当前数据暂不足以判断"，不要编造
+- 先查工具再回答；只有工具也查不到时才说"当前数据暂不足以判断"，��要编造
 
 ${scopeHint}
 
@@ -376,7 +396,7 @@ ${snapshot}
     model: resolveModel(AI_MODELS.chat),
     system,
     messages: await convertToModelMessages(messages),
-    tools: user.class_id ? buildTeacherTools(user.class_id) : undefined,
+    tools: classId ? buildTeacherTools(classId) : undefined,
     stopWhen: stepCountIs(6),
   })
   return result.toUIMessageStreamResponse()

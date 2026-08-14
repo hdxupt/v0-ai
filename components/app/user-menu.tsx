@@ -1,7 +1,9 @@
 "use client"
 
+import { useState } from "react"
 import { ChevronDown, LogOut, RefreshCw, User, Monitor, Moon, Sun, Palette, Check } from "lucide-react"
 import { useTheme } from "next-themes"
+import { AccountSettingsDialog } from "./account-settings-dialog"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
   DropdownMenu,
@@ -19,6 +21,7 @@ import { useAuth } from "@/components/auth/auth-provider"
 export function UserMenu() {
   const { user, logout, switchAccount } = useAuth()
   const { theme, setTheme } = useTheme()
+  const [settingsOpen, setSettingsOpen] = useState(false)
   if (!user) return null
   const sub =
     user.role === "teacher"
@@ -26,6 +29,8 @@ export function UserMenu() {
       : `学号 ${user.student_no ?? "—"}`
 
   return (
+    <>
+    <AccountSettingsDialog user={user} open={settingsOpen} onOpenChange={setSettingsOpen} />
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button className="flex items-center gap-2 pl-1.5 pr-2 py-1 rounded-md hover:bg-muted transition-colors">
@@ -54,7 +59,7 @@ export function UserMenu() {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem disabled>
+        <DropdownMenuItem onClick={() => setSettingsOpen(true)}>
           <User className="w-3.5 h-3.5" />
           账号设置
         </DropdownMenuItem>
@@ -92,5 +97,6 @@ export function UserMenu() {
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+    </>
   )
 }
